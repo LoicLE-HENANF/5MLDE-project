@@ -1,0 +1,14 @@
+apiVersion: 1
+
+# Les dashboards JSON versionnés dans infra/grafana/dashboards sont chargés au démarrage
+# et relus toutes les 30 s ; ils restent modifiables dans l'UI mais le fichier fait foi.
+providers:
+  - name: projet
+    folder: Projet 5MLDE
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
