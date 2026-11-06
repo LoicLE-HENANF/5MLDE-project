@@ -1,0 +1,56 @@
+[project]
+name = "mlde-projet"
+dynamic = ["version"]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  # Clients alignés sur les versions des serveurs de compose.yml.
+  "mlflow==3.16.1",
+  "prefect==3.8.7",
+  "psycopg[binary,pool]>=3.3.8",
+  "httpx>=0.28.1",
+  "python-dotenv>=1.1.0",
+  "packaging>=24.0",
+  # Le serveur Prefect 3.8.7 (test harness, serve) utilise Body(min_items=...), retiré dans FastAPI 0.155.
+  "fastapi<0.155",
+]
+
+[dependency-groups]
+dev = [
+  "pytest==8.3.5",
+  "ruff==0.14.4",
+]
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+# Version calculée depuis git au build : tag exact -> 0.2.0 ; commits après le tag -> 0.2.1.devN+g<sha> ;
+# arbre modifié -> suffixe .d<date>. Le build exige donc un clone git.
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/connectors"]
+
+[tool.uv]
+# Réinstalle le projet (et recalcule sa version) à chaque commit ou tag.
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: nécessite la stack docker compose démarrée (uv run pytest -m integration)"]
+addopts = "-m 'not integration'"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "BLE", "SIM", "RUF"]
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint.isort]
+known-first-party = ["connectors"]
