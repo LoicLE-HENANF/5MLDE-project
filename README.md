@@ -2,33 +2,98 @@
 
 Mini projet du module 5MLDE — énoncé : [subject.md](subject.md).
 
+## Prérequis
+
+- Docker (Compose v2)
+- [uv](https://docs.astral.sh/uv/) — Python 3.12 est installé automatiquement
+- un clone git du dépôt : la version du paquet est calculée depuis les tags git
+
 ## Stack locale (Docker Compose)
 
 ```powershell
-copy .env.example .env        # facultatif : ports et mots de passe
-docker compose up -d --wait   # démarre et attend que tous les services soient healthy
+copy .env.example .env        # puis adapter si besoin (ports, mots de passe, adresses)
+docker compose up -d --build --wait   # démarre et attend que tous les services soient healthy
 docker compose down           # arrêt (ajouter -v pour repartir de volumes vides)
 ```
 
 | Service | URL (hôte) | Rôle |
 |---|---|---|
-| MLflow 3.16.1 | http://localhost:5050 | Suivi des expériences, registre de modèles, artefacts (backend SQLite) |
-| Prefect 3.8.7 | http://localhost:4250 | Orchestration des flows (backend PostgreSQL, base `prefect`) |
-| PostgreSQL 18.6 | `localhost:5433` | Base `mlops` (schéma `tracing` : traces de l'API) + base `prefect` |
-| Grafana 13.2.3 | http://localhost:3030 | Supervision (admin / `5mlde-projet-admin` par défaut) |
+| MLflow 3.16.1 | http://localhost:5000 | Expériences, registre de modèles, artefacts (backend PostgreSQL, base `mlflow`) |
+| Prefect 3.8.7 | http://localhost:4200 | Orchestration des flows (backend PostgreSQL, base `prefect`) |
+| PostgreSQL 18.6 | `localhost:5432` | Bases `mlops` (schéma `tracing`), `prefect`, `mlflow` |
+| Grafana 13.2.3 | http://localhost:3000 | Supervision (admin / `5mlde-projet-admin` par défaut) |
 
-Les ports sont décalés par rapport à la stack des TPs (5000/4200/5432/3000) pour que les deux
-puissent tourner en même temps sans qu'un client mal configuré écrive dans la mauvaise base.
+Tous les ports sont liés à `127.0.0.1` uniquement et se changent dans `.env`.
+Les mots de passe PostgreSQL ne sont appliqués qu'à la création du volume `postgres_data`.
 
 ### Rôles PostgreSQL
 
-Créés par `infra/postgres/init/001-roles.sql` au premier démarrage du volume :
+Créés par `infra/postgres/init/001-roles.sql` au premier démarrage du volume ; les tables de
+traçabilité sont créées par `infra/postgres/init/002-tracing.sql`.
 
 | Rôle | Accès |
 |---|---|
 | `api_writer` | `mlops.tracing` : SELECT/INSERT (traces en ajout seul) |
-| `grafana_reader` | lecture seule (`default_transaction_read_only`, timeout 10 s) sur `mlops.tracing` et `prefect` |
+| `grafana_reader` | lecture seule (`default_transaction_read_only`, timeout 10 s) sur `mlops.tracing`, `prefect` et `mlflow` |
 | `prefect` | propriétaire de la base `prefect` (migrations gérées par le serveur Prefect) |
+| `mlflow` | propriétaire de la base `mlflow` (migrations gérées par le serveur MLflow) |
 
-Grafana est provisionné automatiquement : deux datasources (`projet-traces`, `projet-prefect`)
-et les dashboards JSON placés dans `infra/grafana/dashboards/`.
+Grafana est provisionné automatiquement : trois datasources (`projet-traces`, `projet-prefect`,
+`projet-mlflow`) et les dashboards JSON placés dans `infra/grafana/dashboards/`.
+
+## Paquet `connectors`
+
+Un connecteur par brique de la stack, configuré uniquement par variables d'environnement
+(`.env` à la racine, voir `.env.example`). Une configuration invalide lève `ConfigError` ; un
+service injoignable ou qui refuse la connexion lève `ConnectorError` avec un conseil de correction.
+
+| Module | Rôle |
+|---|---|
+| `connectors.config` | Lecture et validation de la configuration de chaque service |
+| `connectors.mlflow` | Runs, log et enregistrement des modèles, alias, chargement |
+| `connectors.prefect` | Santé, déclenchement de déploiements, contexte de run, artifacts |
+| `connectors.postgres` | Écriture des traces dans `mlops.tracing` (pool `api_writer`) |
+| `connectors.grafana` | Santé, datasources, dashboards, annotations |
+| `connectors.provenance` | Version et empreintes du code et des dépendances |
+| `connectors.health` | Vérification de toutes les briques |
+
+```powershell
+uv sync
+uv run python -m connectors.health              # toutes les briques
+uv run python -m connectors.health mlflow postgres
+```
+
+### Traçabilité des modèles
+
+Chaque run et chaque modèle MLflow porte la provenance du code qui l'a produit (tags `code.*`) :
+version calculée depuis git (`0.2.0` = tag `v0.2.0`, `0.2.1.devN+g<sha>` = commit, suffixe
+`.d<date>` = arbre modifié), empreinte SHA-256 du paquet `connectors` et des dépendances
+installées. Le code du paquet et la liste exacte des dépendances sont embarqués dans le modèle.
+
+`register_model` refuse un modèle dont le code n'est pas identifiable de façon fiable : arbre
+git modifié ou installation éditable. Pour produire un modèle publiable :
+
+```powershell
+git tag v0.2.0                                  # ou committer : version 0.2.1.devN+g<sha>
+uv run --no-editable python -m <votre_module>   # copie figée du code, version exacte
+```
+
+## Tests
+
+```powershell
+uv run pytest                    # tests unitaires : services simulés, aucune stack nécessaire
+docker compose up -d --build --wait
+uv run pytest -m integration     # tests d'intégration contre la stack réelle
+```
+
+Les tests d'intégration créent leurs objets (modèles, traces, dashboards, runs Prefect) avec un
+suffixe unique et les suppriment à la fin ; les traces sont effacées avec le compte administrateur
+PostgreSQL (`POSTGRES_PASSWORD`), `api_writer` n'ayant pas le droit DELETE. Les runs MLflow
+restent dans l'expérience `integration-tests`, séparée de celle du projet.
+
+## Qualité
+
+```powershell
+uv run ruff check src tests
+uv run ruff format src tests
+```
