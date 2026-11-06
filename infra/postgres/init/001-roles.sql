@@ -5,14 +5,17 @@
 \getenv api_password API_DB_PASSWORD
 \getenv grafana_password GRAFANA_DB_PASSWORD
 \getenv prefect_password PREFECT_DB_PASSWORD
+\getenv mlflow_password MLFLOW_DB_PASSWORD
 
 -- Rôles applicatifs (moindre privilège) :
---   api_writer     : l'API écrit ses traces (prédictions, feedbacks, erreurs) dans mlops.tracing
---   grafana_reader : lecture seule pour les dashboards (traces API + runs Prefect)
+--   api_writer     : l'application écrit ses traces (runs, modèles, prédictions) dans mlops.tracing
+--   grafana_reader : lecture seule pour les dashboards (traces + runs Prefect + registre MLflow)
 --   prefect        : propriétaire de la base du serveur Prefect
+--   mlflow         : propriétaire de la base du serveur MLflow (backend store)
 CREATE ROLE api_writer LOGIN PASSWORD :'api_password';
 CREATE ROLE grafana_reader LOGIN PASSWORD :'grafana_password';
 CREATE ROLE prefect LOGIN PASSWORD :'prefect_password';
+CREATE ROLE mlflow LOGIN PASSWORD :'mlflow_password';
 ALTER ROLE grafana_reader SET statement_timeout = '10s';
 ALTER ROLE grafana_reader SET default_transaction_read_only = on;
 
@@ -47,4 +50,18 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT CREATE ON SCHEMA public TO prefect;
 -- Grafana lit les tables que Prefect créera (flow_run, task_run, deployment...).
 ALTER DEFAULT PRIVILEGES FOR ROLE prefect IN SCHEMA public
+    GRANT SELECT ON TABLES TO grafana_reader;
+
+-- Base mlflow : créée vide, le serveur MLflow y crée ses tables au premier démarrage
+-- (experiments, runs, metrics, registered_models, model_versions...).
+\connect postgres
+CREATE DATABASE mlflow OWNER mlflow;
+REVOKE ALL ON DATABASE mlflow FROM PUBLIC;
+GRANT CONNECT ON DATABASE mlflow TO grafana_reader;
+
+\connect mlflow
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT CREATE ON SCHEMA public TO mlflow;
+-- Grafana lit le registre (versions, alias, métriques des runs).
+ALTER DEFAULT PRIVILEGES FOR ROLE mlflow IN SCHEMA public
     GRANT SELECT ON TABLES TO grafana_reader;

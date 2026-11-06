@@ -1,9 +1,6 @@
 # Stack locale du projet 5MLDE (lehenanf).
-# Démarrage : docker compose up -d --wait   (personnalisation : copier .env.example en .env)
-#
-# Ports hôte décalés par rapport à la stack des TPs (supinfo-5mlde : 5000/4200/5432/3000) :
-# les deux stacks peuvent tourner en même temps, et un client mal configuré échoue
-# au lieu d'écrire silencieusement dans la base d'un TP.
+# Démarrage : docker compose up -d --build --wait   (configuration : copier .env.example en .env)
+# Ports hôte par défaut de chaque outil (5432/5000/4200/3000), liés à 127.0.0.1 uniquement.
 name: mlde-projet
 
 x-healthcheck: &healthcheck-defaults
@@ -24,8 +21,9 @@ services:
       API_DB_PASSWORD: "${API_DB_PASSWORD:-5mlde-projet-api}"
       GRAFANA_DB_PASSWORD: "${GRAFANA_DB_PASSWORD:-5mlde-projet-grafana}"
       PREFECT_DB_PASSWORD: "${PREFECT_DB_PASSWORD:-5mlde-projet-prefect}"
+      MLFLOW_DB_PASSWORD: "${MLFLOW_DB_PASSWORD:-5mlde-projet-mlflow}"
     ports:
-      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       # PostgreSQL 18 utilise un sous-dossier de version sous /var/lib/postgresql.
       - postgres_data:/var/lib/postgresql
@@ -38,11 +36,19 @@ services:
       start_period: 30s
 
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v3.16.1
+    # Image officielle + pilote PostgreSQL (infra/mlflow/Dockerfile).
+    build: ./infra/mlflow
+    image: mlde-projet/mlflow:3.16.1
     restart: unless-stopped
     entrypoint: ["mlflow"]
-    # Backend SQLite : l'image officielle n'embarque pas de pilote PostgreSQL et un seul
-    # processus écrit (1 worker) ; les artefacts sont servis par le serveur (--serve-artifacts).
+    # Backend PostgreSQL (base mlflow) : plusieurs workers possibles et registre lisible par
+    # Grafana. Les artefacts restent sur le volume, servis par le serveur (--serve-artifacts).
+    environment:
+      # Lu par « mlflow server » (--backend-store-uri) : le mot de passe reste hors de la ligne de commande.
+      MLFLOW_BACKEND_STORE_URI: "postgresql+psycopg2://mlflow:${MLFLOW_DB_PASSWORD:-5mlde-projet-mlflow}@postgres:5432/mlflow"
+    depends_on:
+      postgres:
+        condition: service_healthy
     command:
       - server
       - --host
@@ -50,16 +56,14 @@ services:
       - --port
       - "5000"
       - --workers
-      - "1"
-      - --backend-store-uri
-      - sqlite:////mlflow/mlflow.db
+      - "2"
       - --serve-artifacts
       - --artifacts-destination
       - /mlflow/artifacts
       - --allowed-hosts
       - "localhost:*,127.0.0.1:*,mlflow:5000"
     ports:
-      - "127.0.0.1:${MLFLOW_PORT:-5050}:5000"
+      - "127.0.0.1:${MLFLOW_PORT:-5000}:5000"
     volumes:
       - mlflow_data:/mlflow
     healthcheck:
@@ -76,15 +80,15 @@ services:
     command: ["prefect", "server", "start", "--host", "0.0.0.0", "--port", "4200"]
     environment:
       PREFECT_HOME: /var/lib/prefect
-      # Base PostgreSQL (et non SQLite comme dans les TPs) : pas de verrou d'écriture unique
+      # Base PostgreSQL plutôt que SQLite : pas de verrou d'écriture unique
       # et les runs deviennent interrogeables par Grafana (supervision des traitements).
       PREFECT_SERVER_DATABASE_CONNECTION_URL: "postgresql+asyncpg://prefect:${PREFECT_DB_PASSWORD:-5mlde-projet-prefect}@postgres:5432/prefect"
       # Adresse de l'API vue depuis le navigateur.
-      PREFECT_SERVER_UI_API_URL: "http://localhost:${PREFECT_PORT:-4250}/api"
+      PREFECT_SERVER_UI_API_URL: "http://localhost:${PREFECT_PORT:-4200}/api"
       # Adresse interne pour les commandes exécutées dans ce conteneur.
       PREFECT_API_URL: http://127.0.0.1:4200/api
       PREFECT_SERVER_ANALYTICS_ENABLED: "false"
-      # Correctif repris du TP04 : l'image embarque SQLAlchemy 2.1.1, avec laquelle le scheduler
+      # L'image embarque SQLAlchemy 2.1.1, avec laquelle le scheduler
       # échoue (« Can't evaluate bulk DML statement ») et ne crée aucun run planifié.
       # Installé au démarrage par l'entrypoint officiel (réseau requis).
       EXTRA_PIP_PACKAGES: "sqlalchemy==2.0.44"
@@ -92,7 +96,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "127.0.0.1:${PREFECT_PORT:-4250}:4200"
+      - "127.0.0.1:${PREFECT_PORT:-4200}:4200"
     volumes:
       - prefect_data:/var/lib/prefect
     healthcheck:
@@ -119,7 +123,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "127.0.0.1:${GRAFANA_PORT:-3030}:3000"
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro

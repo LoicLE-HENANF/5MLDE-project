@@ -1,8 +1,9 @@
-apiVersion: 1
+﻿apiVersion: 1
 
-# Deux sources en lecture seule (rôle grafana_reader) :
-#   - traces de l'API (base mlops, schéma tracing)
+# Trois sources en lecture seule (rôle grafana_reader) :
+#   - traces de l'application (base mlops, schéma tracing)
 #   - historique des traitements Prefect (base prefect)
+#   - registre et runs MLflow (base mlflow)
 datasources:
   - name: Projet - Traces API
     uid: projet-traces
@@ -37,6 +38,27 @@ datasources:
       password: $GRAFANA_DB_PASSWORD
     jsonData:
       database: prefect
+      sslmode: disable
+      postgresVersion: 1800
+      timescaledb: false
+      maxOpenConns: 2
+      maxIdleConns: 1
+      connMaxLifetime: 300
+
+  # Registre et runs MLflow (base mlflow, tables créées par le serveur MLflow).
+  - name: Projet - MLflow
+    uid: projet-mlflow
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    user: grafana_reader
+    editable: false
+    isDefault: false
+    version: 1
+    secureJsonData:
+      password: $GRAFANA_DB_PASSWORD
+    jsonData:
+      database: mlflow
       sslmode: disable
       postgresVersion: 1800
       timescaledb: false
