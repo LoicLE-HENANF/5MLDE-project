@@ -21,7 +21,7 @@ docker compose down           # arrêt (ajouter -v pour repartir de volumes vide
 | MLflow 3.16.1 | http://localhost:5000 | Expériences, registre de modèles, artefacts (backend PostgreSQL, base `mlflow`) |
 | Prefect 3.8.7 | http://localhost:4200 | Orchestration des flows (backend PostgreSQL, base `prefect`) |
 | PostgreSQL 18.6 | `localhost:5432` | Bases `mlops` (schéma `tracing`), `prefect`, `mlflow` |
-| Grafana 13.2.3 | http://localhost:3000 | Supervision (admin / `5mlde-projet-admin` par défaut) |
+| Grafana 13.2.3 | http://localhost:3000 | Supervision (admin / `5mlde-project-admin` par défaut) |
 
 Tous les ports sont liés à `127.0.0.1` uniquement et se changent dans `.env`.
 Les mots de passe PostgreSQL ne sont appliqués qu'à la création du volume `postgres_data`.
@@ -54,7 +54,7 @@ service injoignable ou qui refuse la connexion lève `ConnectorError` avec un co
 | `connectors.prefect` | Santé, déclenchement de déploiements, contexte de run, artifacts |
 | `connectors.postgres` | Écriture des traces dans `mlops.tracing` (pool `api_writer`) |
 | `connectors.grafana` | Santé, datasources, dashboards, annotations |
-| `connectors.provenance` | Version et empreintes du code et des dépendances |
+| `lineage.provenance` | Version et empreintes du code et des dépendances |
 | `connectors.health` | Vérification de toutes les briques |
 
 ```powershell
@@ -67,8 +67,8 @@ uv run python -m connectors.health mlflow postgres
 
 Chaque run et chaque modèle MLflow porte la provenance du code qui l'a produit (tags `code.*`) :
 version calculée depuis git (`0.2.0` = tag `v0.2.0`, `0.2.1.devN+g<sha>` = commit, suffixe
-`.d<date>` = arbre modifié), empreinte SHA-256 du paquet `connectors` et des dépendances
-installées. Le code du paquet et la liste exacte des dépendances sont embarqués dans le modèle.
+`.d<date>` = arbre modifié), empreinte SHA-256 des paquets `connectors`, `lineage` et `marketdata` et des
+dépendances installées. Le code du paquet et la liste exacte des dépendances sont embarqués dans le modèle.
 
 `register_model` refuse un modèle dont le code n'est pas identifiable de façon fiable : arbre
 git modifié ou installation éditable. Pour produire un modèle publiable :
@@ -77,6 +77,19 @@ git modifié ou installation éditable. Pour produire un modèle publiable :
 git tag v0.2.0                                  # ou committer : version 0.2.1.devN+g<sha>
 uv run --no-editable python -m <votre_module>   # copie figée du code, version exacte
 ```
+
+## Paquet `marketdata`
+
+Définition des données : bougies horaires Binance spot pour `BTCUSDT`, `ETHUSDT`, `SOLUSDT`,
+`BNBUSDT` et `XRPUSDT`, depuis 2022-01. Aucun accès réseau dans ce paquet.
+
+| Module | Rôle |
+|---|---|
+| `marketdata.universe` | Symboles, intervalle (`1h`), début de l'historique |
+| `marketdata.sources` | URLs des archives mensuelles et de l'API REST, lecture du `.CHECKSUM`, normalisation (horodatages ms ou µs → UTC à la µs) |
+| `marketdata.schema` | Schéma pandera d'une bougie normalisée (types, unités, bornes) |
+| `marketdata.quality` | Règles qualité : bloquantes (schéma, doublons, alignement, OHLC, volumes, variation > 50 %) ou signalées (bougies manquantes jusqu'à 1 %, variation > 20 %) |
+| `marketdata.identity` | Identité d'un jeu de données : symboles, période, lignes, SHA-256 du contenu (tags `data.*`) |
 
 ## Tests
 

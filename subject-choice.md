@@ -127,12 +127,17 @@ Entraîner un modèle par stratégie donnerait des modèles identiques, puisque 
 ### À quoi servent les stratégies
 
 Les stratégies n'influencent jamais l'entraînement : elles **lisent** les prédictions et les transforment en positions simulées.
+Elles **notent** bien les modèles, mais pas seules : le choix d'un modèle se fait en trois niveaux (cf. §5).
+Choisir uniquement sur le backtest reviendrait à sur-apprendre la période de test : avec assez de variantes
+(features, hyperparamètres, seuils), l'une finit toujours par avoir un bon PnL simulé par hasard. Le PnL dépend aussi
+des frais, du seuil d'abstention et de la taille des positions, et pas seulement de la qualité du modèle.
+
 Elles ont trois usages :
 
 1. **Évaluer avant la mise en service (backtest).** Après l'entraînement, les prédictions de la nouvelle version
    sont rejouées sur la période de test (données non vues), avec chaque stratégie. Les résultats sont enregistrés dans MLflow
-   (Sharpe, max drawdown, rendement net de frais). Le **long/short** sert de **critère de promotion** : la version passe
-   en production seulement si elle fait mieux que la version en production et que les références (cf. §5).
+   (Sharpe, max drawdown, rendement net de frais). Le **long/short** sert de **critère de promotion** (niveau 2) : la version passe
+   en production seulement si elle n'est pas moins bonne que la version en production et fait mieux que les références (cf. §5).
 2. **Présenter dans l'application (paper trading).** En fonctionnement, chaque heure, les stratégies prennent des
    positions *simulées* à partir des vraies prédictions de l'API. L'application affiche :
    - les positions du moment (ex. « long SOL, short XRP ») ;
@@ -157,6 +162,23 @@ intégrés de bout en bout.
 (*embargo*) d'au moins l'horizon de la cible sépare l'entraînement du test. **Jamais de split aléatoire.**
 Les features sont calculées uniquement avec l'information disponible à l'instant t, pour éviter le *look-ahead*.
 
+- **Cibles qui se chevauchent** : le rendement à 4 h de deux bougies voisines partage 3 h. Les exemples dont la cible
+  déborde sur la période de validation sont retirés de l'entraînement (*purge*), en plus de l'embargo.
+- **Période de test finale** (ex. les 3 derniers mois) : jamais utilisée pendant la mise au point (features, hyperparamètres,
+  seuils), évaluée **une seule fois** par version candidate. C'est sur elle que tournent le backtest et la décision de promotion.
+- **Mêmes features à l'entraînement et à l'inférence** : un seul module de calcul, embarqué dans le modèle avec le code.
+- **Bougie en cours ignorée** : seule une bougie clôturée sert de feature ; la bougie ouverte renvoyée par l'API REST est écartée.
+
+### Trois niveaux d'évaluation
+
+| Niveau | Quand | Données | Métriques | Sert à |
+|---|---|---|---|---|
+| 1. Statistique | Pendant l'entraînement | Folds walk-forward | IC, ICIR (rendement) ; QLIKE (volatilité) | Choisir features et hyperparamètres |
+| 2. Stratégie | Après l'entraînement, une fois | Période de test finale | Sharpe net, drawdown, rotation, comparés au champion et aux références | Décider la promotion |
+| 3. Production | En continu | Nouvelles bougies réelles | IC glissant, PnL du paper trading | Surveiller, déclencher le retour arrière |
+
+Le niveau 1 sélectionne, le niveau 2 valide, le niveau 3 confirme. Une version qui ne passe que le niveau 2 n'est pas promue.
+
 ### Métriques suivies (MLflow)
 
 | Famille | Métriques |
@@ -170,18 +192,25 @@ Les features sont calculées uniquement avec l'information disponible à l'insta
 ### Règles 🟡 (seuils à fixer après une première mesure)
 
 - **Promotion** d'une nouvelle version du modèle `rendement`, si toutes les conditions sont remplies :
-  - IC moyen > 0 sur la majorité des folds et supérieur à celui de la version en production ;
-  - Sharpe net de frais supérieur à celui du buy & hold ;
-  - max drawdown pas pire de plus de X points.
+  - niveau 1 : IC moyen > 0 sur la majorité des folds et supérieur à celui de la version en production ;
+  - niveau 2 : Sharpe net de frais du long/short supérieur à celui du buy & hold et pas inférieur à celui du champion ;
+  - niveau 2 : max drawdown pas pire de plus de X points.
 - **Promotion** d'une nouvelle version du modèle `volatilite` : QLIKE meilleur que la persistance **et** que la version en production.
+- **Challenger** : une version candidate peut d'abord recevoir l'alias `challenger`. Elle prédit en parallèle du `champion`
+  (prédictions tracées, sans positions réelles) pendant N jours ; elle est promue si son niveau 3 confirme le niveau 2.
 - **Retour arrière automatique** : si l'IC glissant mesuré en production reste sous 0 pendant N jours, **ou** si le gain/perte
   glissant de la stratégie long/short simulée reste négatif sur la même fenêtre, l'alias de production revient à la version précédente et une alerte est envoyée.
+- **Retour arrière manuel** : une seule commande (ou un bouton de l'application) remet l'alias `champion` sur la version
+  précédente et l'enregistre dans `tracing.model_events`.
+- **Réentraînement** : planifié, et aussi déclenché par la **dérive** des features (PSI au-delà d'un seuil) ou par une baisse du niveau 3.
 
 ## 6. Retours, supervision et pilotage
 
 - **Feedbacks naturels** : une prédiction faite à t est confrontée au rendement et à la volatilité réalisés à
   t + horizon, par un flow Prefect. Le système produit donc lui-même ses vérités terrain, sans saisie manuelle.
 - **Traces** : chaque prédiction est enregistrée avec la version du modèle, la durée de traitement, les erreurs et le feedback associé.
+- **Inférence idempotente** : une seule prédiction par (symbole, bougie, version du modèle), garantie par une contrainte
+  d'unicité ; relancer un flow ne crée pas de doublon.
 - **Application de pilotage** (D7) : interface utilisateur du système, qui sert aussi de support de démonstration.
 
   | Page | Contenu |
@@ -208,3 +237,8 @@ Les features sont calculées uniquement avec l'information disponible à l'insta
 - [x] Interrupteur : **application de pilotage** + état en base via l'API.
 - [x] Application : Streamlit (à revoir à l'implémentation).
 - [ ] 3e modèle `opportunite` (classifieur) : optionnel, à décider après l'intégration des deux premiers.
+- [ ] Durée de la période de test finale (3 mois proposés) et durée de la phase `challenger`.
+- [ ] Seuil de dérive (PSI) déclenchant un réentraînement.
+
+**Ordre de travail** : un circuit complet simple (ingestion → entraînement → inférence → retours → Grafana) avec le modèle
+`rendement` d'abord, puis le modèle `volatilite`, puis les raffinements. Un circuit complet vaut mieux que deux modèles sans production.

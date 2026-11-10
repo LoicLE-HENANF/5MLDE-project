@@ -24,12 +24,12 @@ from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 from packaging.version import Version
 
-from connectors.errors import ProvenanceError
+from lineage.errors import ProvenanceError
 
-DISTRIBUTION = 'mlde-projet'
+DISTRIBUTION = '5MLDE-project'
 # Paquets importables du projet, copiés dans chaque modèle (tenu aligné sur
 # [tool.hatch.build.targets.wheel].packages par tests/test_provenance.py).
-PACKAGES = ('connectors',)
+PACKAGES = ('connectors', 'lineage', 'marketdata')
 
 TAG_PREFIX = 'code.'
 REQUIRED_TAGS = ('version', 'git_ref', 'sha256', 'dirty', 'editable')

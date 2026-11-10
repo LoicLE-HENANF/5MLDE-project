@@ -93,7 +93,7 @@ class MlflowConfig:
             if reader.present('MLFLOW_REGISTRY_URI')
             else tracking
         )
-        experiment = reader.text('MLFLOW_EXPERIMENT_NAME', '5mlde-projet')
+        experiment = reader.text('MLFLOW_EXPERIMENT_NAME', '5mlde-project')
         reader.finish('MLflow')
         return cls(tracking_uri=tracking, registry_uri=registry, experiment=experiment)
 

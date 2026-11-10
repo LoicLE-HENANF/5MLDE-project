@@ -25,13 +25,14 @@ from mlflow.entities.model_registry import ModelVersion
 from mlflow.exceptions import MlflowException
 from mlflow.models.model import ModelInfo
 
-from connectors import provenance
 from connectors._http import check_http
 from connectors.config import MlflowConfig
-from connectors.errors import ConfigError, ProvenanceError
-from connectors.provenance import CodeProvenance
+from connectors.errors import ConfigError
+from lineage import provenance
+from lineage.errors import ProvenanceError
+from lineage.provenance import CodeProvenance
 
-PROJECT_TAG = '5mlde-projet'
+PROJECT_TAG = '5mlde-project'
 _NOT_FOUND = {'RESOURCE_DOES_NOT_EXIST', 'INVALID_PARAMETER_VALUE'}
 
 

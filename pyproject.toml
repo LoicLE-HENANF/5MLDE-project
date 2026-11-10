@@ -1,5 +1,5 @@
 [project]
-name = "mlde-projet"
+name = "5MLDE-project"
 dynamic = ["version"]
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -12,6 +12,9 @@ dependencies = [
   "packaging>=24.0",
   # Le serveur Prefect 3.8.7 (test harness, serve) utilise Body(min_items=...), retiré dans FastAPI 0.155.
   "fastapi<0.155",
+  "pandas>=3.1.1",
+  "pandera>=0.36.0",
+  "pyarrow>=25.0.1",
 ]
 
 [dependency-groups]
@@ -30,7 +33,7 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/connectors"]
+packages = ["src/connectors", "src/lineage", "src/marketdata"]
 
 [tool.uv]
 # Réinstalle le projet (et recalcule sa version) à chaque commit ou tag.
@@ -53,4 +56,4 @@ select = ["E", "W", "F", "I", "B", "UP", "BLE", "SIM", "RUF"]
 quote-style = "single"
 
 [tool.ruff.lint.isort]
-known-first-party = ["connectors"]
+known-first-party = ["connectors", "lineage", "marketdata"]

@@ -1,7 +1,7 @@
 # Stack locale du projet 5MLDE (lehenanf).
 # Démarrage : docker compose up -d --build --wait   (configuration : copier .env.example en .env)
 # Ports hôte par défaut de chaque outil (5432/5000/4200/3000), liés à 127.0.0.1 uniquement.
-name: mlde-projet
+name: 5mlde-project
 
 x-healthcheck: &healthcheck-defaults
   interval: 15s
@@ -16,12 +16,12 @@ services:
     environment:
       POSTGRES_DB: mlops
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-5mlde-projet-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-5mlde-project-postgres}"
       # Lus par infra/postgres/init/001-roles.sql (\getenv) au premier démarrage du volume.
-      API_DB_PASSWORD: "${API_DB_PASSWORD:-5mlde-projet-api}"
-      GRAFANA_DB_PASSWORD: "${GRAFANA_DB_PASSWORD:-5mlde-projet-grafana}"
-      PREFECT_DB_PASSWORD: "${PREFECT_DB_PASSWORD:-5mlde-projet-prefect}"
-      MLFLOW_DB_PASSWORD: "${MLFLOW_DB_PASSWORD:-5mlde-projet-mlflow}"
+      API_DB_PASSWORD: "${API_DB_PASSWORD:-5mlde-project-api}"
+      GRAFANA_DB_PASSWORD: "${GRAFANA_DB_PASSWORD:-5mlde-project-grafana}"
+      PREFECT_DB_PASSWORD: "${PREFECT_DB_PASSWORD:-5mlde-project-prefect}"
+      MLFLOW_DB_PASSWORD: "${MLFLOW_DB_PASSWORD:-5mlde-project-mlflow}"
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -38,14 +38,14 @@ services:
   mlflow:
     # Image officielle + pilote PostgreSQL (infra/mlflow/Dockerfile).
     build: ./infra/mlflow
-    image: mlde-projet/mlflow:3.16.1
+    image: 5mlde-project/mlflow:3.16.1
     restart: unless-stopped
     entrypoint: ["mlflow"]
     # Backend PostgreSQL (base mlflow) : plusieurs workers possibles et registre lisible par
     # Grafana. Les artefacts restent sur le volume, servis par le serveur (--serve-artifacts).
     environment:
       # Lu par « mlflow server » (--backend-store-uri) : le mot de passe reste hors de la ligne de commande.
-      MLFLOW_BACKEND_STORE_URI: "postgresql+psycopg2://mlflow:${MLFLOW_DB_PASSWORD:-5mlde-projet-mlflow}@postgres:5432/mlflow"
+      MLFLOW_BACKEND_STORE_URI: "postgresql+psycopg2://mlflow:${MLFLOW_DB_PASSWORD:-5mlde-project-mlflow}@postgres:5432/mlflow"
     depends_on:
       postgres:
         condition: service_healthy
@@ -82,7 +82,7 @@ services:
       PREFECT_HOME: /var/lib/prefect
       # Base PostgreSQL plutôt que SQLite : pas de verrou d'écriture unique
       # et les runs deviennent interrogeables par Grafana (supervision des traitements).
-      PREFECT_SERVER_DATABASE_CONNECTION_URL: "postgresql+asyncpg://prefect:${PREFECT_DB_PASSWORD:-5mlde-projet-prefect}@postgres:5432/prefect"
+      PREFECT_SERVER_DATABASE_CONNECTION_URL: "postgresql+asyncpg://prefect:${PREFECT_DB_PASSWORD:-5mlde-project-prefect}@postgres:5432/prefect"
       # Adresse de l'API vue depuis le navigateur.
       PREFECT_SERVER_UI_API_URL: "http://localhost:${PREFECT_PORT:-4200}/api"
       # Adresse interne pour les commandes exécutées dans ce conteneur.
@@ -113,12 +113,12 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
       # Identifiants de démonstration pour une stack liée à localhost uniquement.
-      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-5mlde-projet-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-5mlde-project-admin}"
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       # Utilisé par le provisioning des datasources ($GRAFANA_DB_PASSWORD).
-      GRAFANA_DB_PASSWORD: "${GRAFANA_DB_PASSWORD:-5mlde-projet-grafana}"
+      GRAFANA_DB_PASSWORD: "${GRAFANA_DB_PASSWORD:-5mlde-project-grafana}"
     depends_on:
       postgres:
         condition: service_healthy

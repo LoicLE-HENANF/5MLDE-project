@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from connectors import provenance
 from connectors.config import ROOT
-from connectors.errors import ProvenanceError
+from lineage import provenance
+from lineage.errors import ProvenanceError
 
 
 @pytest.mark.parametrize(
@@ -52,7 +52,11 @@ def test_hash_tree_detects_content_and_name_changes(tmp_path, files):
 
 
 def test_package_dirs_point_to_sources():
-    assert provenance.package_dirs() == (ROOT / 'src' / 'connectors',)
+    assert provenance.package_dirs() == (
+        ROOT / 'src' / 'connectors',
+        ROOT / 'src' / 'lineage',
+        ROOT / 'src' / 'marketdata',
+    )
 
 
 def test_packages_match_wheel_configuration():

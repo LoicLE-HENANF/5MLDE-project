@@ -38,7 +38,7 @@ TABLES: dict[str, frozenset[str]] = {
 }
 RUN_STATUSES = ('success', 'failure', 'cancelled')
 MODEL_EVENTS = ('registered', 'promoted', 'retired')
-APPLICATION_NAME = '5mlde-projet'
+APPLICATION_NAME = '5mlde-project'
 
 
 class PostgresConnector:

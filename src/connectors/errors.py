@@ -24,7 +24,3 @@ class ConnectorError(RuntimeError):
         if hint:
             message += f' -> {hint}'
         super().__init__(message)
-
-
-class ProvenanceError(ValueError):
-    """Le code qui a produit un modèle n'est pas identifiable de façon fiable (non publiable)."""

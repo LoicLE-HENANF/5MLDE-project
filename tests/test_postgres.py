@@ -73,7 +73,7 @@ def test_conninfo(config):
         'user': 'api_writer',
         'password': 'secret-api',
         'connect_timeout': '5',
-        'application_name': '5mlde-projet',
+        'application_name': '5mlde-project',
     }
 
 

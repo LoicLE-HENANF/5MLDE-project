@@ -18,10 +18,11 @@ import pytest
 from mlflow.exceptions import MlflowException
 from mlflow.protos.databricks_pb2 import INTERNAL_ERROR, RESOURCE_DOES_NOT_EXIST
 
-from connectors import provenance
 from connectors.config import MlflowConfig
-from connectors.errors import ConfigError, ConnectorError, ProvenanceError
+from connectors.errors import ConfigError, ConnectorError
 from connectors.mlflow import REQUIREMENTS_ARTIFACT, MlflowConnector
+from lineage import provenance
+from lineage.errors import ProvenanceError
 from tests.conftest import refuse
 
 
@@ -89,7 +90,7 @@ def test_experiment_created_once(config, client):
     connector = MlflowConnector(config, client=client)
     assert connector.experiment_id() == '7'
     assert connector.experiment_id() == '7'
-    client.create_experiment.assert_called_once_with('exp-test', tags={'projet': '5mlde-projet'})
+    client.create_experiment.assert_called_once_with('exp-test', tags={'projet': '5mlde-project'})
 
 
 def test_existing_experiment_reused(config, client):
@@ -187,7 +188,7 @@ def test_end_to_end_run_registry_alias_load(local_connector, released):
 
     # le modèle embarque le code du paquet et les dépendances exactes
     model_dir = Path(mlflow.artifacts.download_artifacts(info.model_uri))
-    assert (model_dir / 'code' / 'connectors' / 'provenance.py').is_file()
+    assert (model_dir / 'code' / 'lineage' / 'provenance.py').is_file()
     assert (model_dir / 'requirements.txt').read_text().split() == ['mlflow==3.16.1']
 
     assert local_connector.get_version('rendement', 'champion') is None  # modèle inexistant
