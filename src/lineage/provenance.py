@@ -13,7 +13,6 @@ Tout vient des métadonnées d'installation du paquet, sans appeler git à l'ex�
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, distribution
@@ -29,7 +28,7 @@ from lineage.errors import ProvenanceError
 DISTRIBUTION = '5MLDE-project'
 # Paquets importables du projet, copiés dans chaque modèle (tenu aligné sur
 # [tool.hatch.build.targets.wheel].packages par tests/test_provenance.py).
-PACKAGES = ('connectors', 'lineage', 'marketdata')
+PACKAGES = ('connectors', 'flows', 'ingestion', 'lineage', 'marketdata')
 
 TAG_PREFIX = 'code.'
 REQUIRED_TAGS = ('version', 'git_ref', 'sha256', 'dirty', 'editable')
@@ -77,13 +76,17 @@ def is_editable(dist_name: str = DISTRIBUTION) -> bool:
 
 
 def package_dirs(packages: tuple[str, ...] = PACKAGES) -> tuple[Path, ...]:
-    dirs = []
-    for name in packages:
-        spec = importlib.util.find_spec(name)
-        if spec is None or not spec.submodule_search_locations:
-            raise ProvenanceError(f'paquet {name!r} introuvable')
-        dirs.append(Path(next(iter(spec.submodule_search_locations))))
-    return tuple(dirs)
+    """Dossiers des paquets, résolus à côté de `lineage` (installés ensemble par la même roue).
+
+    Pas de `find_spec` : un modèle MLflow chargé ajoute sa copie de code à `sys.path`,
+    qui masquerait alors les sources réelles.
+    """
+    root = Path(__file__).resolve().parent.parent
+    dirs = tuple(root / name for name in packages)
+    for path in dirs:
+        if not (path / '__init__.py').is_file():
+            raise ProvenanceError(f'paquet {path.name!r} introuvable dans {root}')
+    return dirs
 
 
 def hash_tree(dirs: tuple[Path, ...]) -> str:

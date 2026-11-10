@@ -52,11 +52,7 @@ def test_hash_tree_detects_content_and_name_changes(tmp_path, files):
 
 
 def test_package_dirs_point_to_sources():
-    assert provenance.package_dirs() == (
-        ROOT / 'src' / 'connectors',
-        ROOT / 'src' / 'lineage',
-        ROOT / 'src' / 'marketdata',
-    )
+    assert provenance.package_dirs() == tuple(ROOT / 'src' / name for name in provenance.PACKAGES)
 
 
 def test_packages_match_wheel_configuration():

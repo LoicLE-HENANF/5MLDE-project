@@ -50,3 +50,37 @@ def http_client() -> Callable[..., httpx.Client]:
 def refuse(request: httpx.Request) -> httpx.Response:
     """Handler simulant un service éteint (connexion refusée)."""
     raise httpx.ConnectError('Connection refused', request=request)
+
+
+# -- bougies au format Binance --------------------------------------------------------------
+HOUR_MS = 3_600_000
+START_MS = 1_735_689_600_000  # 2025-01-01T00:00:00Z
+
+
+def raw_rows(n=3, start_ms=START_MS, micros=False, close=100.0, step=1.0):
+    """Lignes brutes au format Binance (chaînes, comme l'API REST et les CSV)."""
+    rows = []
+    for i in range(n):
+        open_ms = start_ms + i * HOUR_MS
+        price = close + i * step
+        if micros:
+            open_t, close_t = open_ms * 1000, (open_ms + HOUR_MS) * 1000 - 1
+        else:
+            open_t, close_t = open_ms, open_ms + HOUR_MS - 1
+        rows.append(
+            [
+                str(open_t),
+                f'{price:.8f}',
+                f'{price + 2:.8f}',
+                f'{price - 2:.8f}',
+                f'{price + 1:.8f}',
+                '10.5',
+                str(close_t),
+                '1050.0',
+                '42',
+                '4.0',
+                '400.0',
+                '0',
+            ]
+        )
+    return rows

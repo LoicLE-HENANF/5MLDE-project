@@ -35,9 +35,25 @@ TABLES: dict[str, frozenset[str]] = {
     'model_events': frozenset(
         {'model_name', 'version', 'event', 'alias', 'mlflow_run_id', 'model_uri', 'details'}
     ),
+    'ingestion_batches': frozenset(
+        {
+            'source',
+            'symbol',
+            'period_start',
+            'period_end',
+            'status',
+            'rows',
+            'source_sha256',
+            'data_sha256',
+            'issues',
+            'prefect_flow_run_id',
+        }
+    ),
 }
 RUN_STATUSES = ('success', 'failure', 'cancelled')
 MODEL_EVENTS = ('registered', 'promoted', 'retired')
+BATCH_SOURCES = ('archive', 'rest')
+BATCH_STATUSES = ('accepted', 'rejected')
 APPLICATION_NAME = '5mlde-project'
 
 
@@ -212,5 +228,43 @@ class PostgresConnector:
                 'mlflow_run_id': mlflow_run_id,
                 'model_uri': model_uri,
                 'details': dict(details or {}),
+            },
+        )
+
+    def record_ingestion_batch(
+        self,
+        *,
+        source: str,
+        symbol: str,
+        period_start: datetime,
+        period_end: datetime,
+        status: str,
+        rows: int,
+        source_sha256: str | None = None,
+        data_sha256: str | None = None,
+        issues: list[Mapping[str, Any]] | None = None,
+        prefect_flow_run_id: str | None = None,
+    ) -> int:
+        if source not in BATCH_SOURCES:
+            raise ValueError(f'source {source!r} invalide (attendu : {BATCH_SOURCES})')
+        if status not in BATCH_STATUSES:
+            raise ValueError(f'status {status!r} invalide (attendu : {BATCH_STATUSES})')
+        if period_end <= period_start:
+            raise ValueError('period_end doit être postérieur à period_start')
+        if rows < 0:
+            raise ValueError('rows doit être positif ou nul')
+        return self.insert(
+            'ingestion_batches',
+            {
+                'source': source,
+                'symbol': symbol,
+                'period_start': period_start,
+                'period_end': period_end,
+                'status': status,
+                'rows': rows,
+                'source_sha256': source_sha256,
+                'data_sha256': data_sha256,
+                'issues': [dict(i) for i in issues or []],
+                'prefect_flow_run_id': prefect_flow_run_id,
             },
         )

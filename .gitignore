@@ -221,3 +221,6 @@ __marimo__/
 
 
 .idea
+
+# Données téléchargées (historique Parquet)
+/data/

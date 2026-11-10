@@ -33,7 +33,7 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/connectors", "src/lineage", "src/marketdata"]
+packages = ["src/connectors", "src/flows", "src/ingestion", "src/lineage", "src/marketdata"]
 
 [tool.uv]
 # Réinstalle le projet (et recalcule sa version) à chaque commit ou tag.
@@ -56,4 +56,4 @@ select = ["E", "W", "F", "I", "B", "UP", "BLE", "SIM", "RUF"]
 quote-style = "single"
 
 [tool.ruff.lint.isort]
-known-first-party = ["connectors", "lineage", "marketdata"]
+known-first-party = ["connectors", "flows", "ingestion", "lineage", "marketdata"]

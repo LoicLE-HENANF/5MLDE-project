@@ -23,11 +23,11 @@ from prefect import flow
 from prefect.client.orchestration import get_client
 from prefect.settings import PREFECT_API_URL, temporary_settings
 
-from connectors.config import GrafanaConfig, MlflowConfig, PostgresConfig, PrefectConfig, load_env
-from connectors.grafana import GrafanaConnector
+from connectors.config import MlflowConfig, PostgresConfig, PrefectConfig
 from connectors.mlflow import MlflowConnector
 from connectors.postgres import PostgresConnector
 from connectors.prefect import PrefectConnector, mlflow_tags, publish_markdown, run_context
+from tests.integration.conftest import grafana_sql
 
 pytestmark = pytest.mark.integration
 
@@ -43,11 +43,6 @@ class _Constant(mlflow.pyfunc.PythonModel):
 
 
 # -- fixtures ----------------------------------------------------------------------------------
-@pytest.fixture(scope='module')
-def env() -> dict[str, str]:
-    return load_env()
-
-
 @pytest.fixture(scope='module')
 def mlflow_connector(env):
     config = dataclasses.replace(MlflowConfig.from_env(env), experiment=TEST_EXPERIMENT)
@@ -81,32 +76,6 @@ def db(env):
     ) as conn:
         conn.execute('DELETE FROM tracing.pipeline_runs WHERE pipeline = %s', (TEST_PIPELINE,))
         conn.execute('DELETE FROM tracing.model_events WHERE model_name = %s', (TEST_MODEL,))
-
-
-@pytest.fixture(scope='module')
-def grafana(env):
-    with GrafanaConnector(GrafanaConfig.from_env(env)) as connector:
-        yield connector
-
-
-def grafana_sql(grafana: GrafanaConnector, datasource_uid: str, sql: str) -> list[list]:
-    """Requête SQL exécutée PAR Grafana (rôle grafana_reader) ; renvoie les colonnes."""
-    response = grafana._request(
-        'POST',
-        '/api/ds/query',
-        json={
-            'queries': [
-                {
-                    'refId': 'A',
-                    'datasource': {'uid': datasource_uid},
-                    'rawSql': sql,
-                    'format': 'table',
-                }
-            ]
-        },
-    )
-    frames = response.json()['results']['A']['frames']
-    return frames[0]['data']['values'] if frames else []
 
 
 # -- un service à la fois ----------------------------------------------------------------------

@@ -12,7 +12,14 @@ from psycopg_pool import PoolTimeout
 
 from connectors.config import ROOT, PostgresConfig
 from connectors.errors import ConnectorError
-from connectors.postgres import MODEL_EVENTS, RUN_STATUSES, TABLES, PostgresConnector
+from connectors.postgres import (
+    BATCH_SOURCES,
+    BATCH_STATUSES,
+    MODEL_EVENTS,
+    RUN_STATUSES,
+    TABLES,
+    PostgresConnector,
+)
 
 INIT_SQL = ROOT / 'infra' / 'postgres' / 'init' / '002-tracing.sql'
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
@@ -225,6 +232,48 @@ def test_record_model_event(config):
         connector.record_model_event(model_name='m', version=1, event='deleted', model_uri='u')
 
 
+def test_record_ingestion_batch(config):
+    connector, fake = make(config)
+    connector.record_ingestion_batch(
+        source='archive',
+        symbol='BTCUSDT',
+        period_start=T0,
+        period_end=T0 + timedelta(days=31),
+        status='rejected',
+        rows=744,
+        issues=[{'rule': 'doublons', 'blocking': True, 'count': 2}],
+    )
+    _, params = fake.conn.executed[0]
+    assert params[:6] == ['archive', 'BTCUSDT', T0, T0 + timedelta(days=31), 'rejected', 744]
+    issues = params[8]
+    assert isinstance(issues, Jsonb) and issues.obj == [{'rule': 'doublons', 'blocking': True, 'count': 2}]
+
+
+@pytest.mark.parametrize(
+    'kwargs',
+    [
+        {'source': 'ftp'},
+        {'status': 'ok'},
+        {'period_end': T0},
+        {'rows': -1},
+    ],
+)
+def test_record_ingestion_batch_validation(config, kwargs):
+    connector, fake = make(config)
+    args = {
+        'source': 'rest',
+        'symbol': 'BTCUSDT',
+        'period_start': T0,
+        'period_end': T0 + timedelta(hours=1),
+        'status': 'accepted',
+        'rows': 1,
+        **kwargs,
+    }
+    with pytest.raises(ValueError):
+        connector.record_ingestion_batch(**args)
+    assert fake.calls == []
+
+
 def test_connection_lost_during_write(config):
     class Broken(FakeConnection):
         def execute(self, query, params=None):
@@ -241,7 +290,7 @@ def _sql_columns(table: str) -> tuple[set[str], str]:
         rf'CREATE TABLE tracing\.{table} \((.*?)\n\);', INIT_SQL.read_text(encoding='utf-8'), re.S
     )
     assert body, f'table {table} absente de {INIT_SQL.name}'
-    columns = {m.group(1) for m in re.finditer(r'^\s{4}([a-z_]+)\s', body.group(1), re.M)}
+    columns = {m.group(1) for m in re.finditer(r'^\s{4}([a-z][a-z0-9_]*)\s', body.group(1), re.M)}
     return columns - {'id', 'recorded_at'}, body.group(1)
 
 
@@ -256,3 +305,5 @@ def test_allowed_values_match_init_sql():
     _, events = _sql_columns('model_events')
     assert all(f"'{s}'" in runs for s in RUN_STATUSES)
     assert all(f"'{e}'" in events for e in MODEL_EVENTS)
+    _, batches = _sql_columns('ingestion_batches')
+    assert all(f"'{s}'" in batches for s in BATCH_SOURCES + BATCH_STATUSES)
