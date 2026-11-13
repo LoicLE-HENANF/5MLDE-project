@@ -67,8 +67,9 @@ uv run python -m connectors.health mlflow postgres
 
 Chaque run et chaque modèle MLflow porte la provenance du code qui l'a produit (tags `code.*`) :
 version calculée depuis git (`0.2.0` = tag `v0.2.0`, `0.2.1.devN+g<sha>` = commit, suffixe
-`.d<date>` = arbre modifié), empreinte SHA-256 des paquets `connectors`, `lineage` et `marketdata` et des
-dépendances installées. Le code du paquet et la liste exacte des dépendances sont embarqués dans le modèle.
+`.d<date>` = arbre modifié), empreinte SHA-256 des paquets du projet (`connectors`, `features`, `flows`,
+`ingestion`, `lineage` et `marketdata`) et des dépendances installées. Le code des paquets et la liste
+exacte des dépendances sont embarqués dans le modèle.
 
 `register_model` refuse un modèle dont le code n'est pas identifiable de façon fiable : arbre
 git modifié ou installation éditable. Pour produire un modèle publiable :
