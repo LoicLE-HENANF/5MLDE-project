@@ -131,9 +131,16 @@ elle est nulle, le ratio vaut 0. Le ratio acheteur est `taker_buy_quote_volume /
 il vaut 0 quand `quote_volume` est nul. Les features transversales sont calculées à heure identique,
 sur les symboles disponibles ; la ligne est marquée non exploitable si le symbole lui-même est absent.
 
-La cible rendement à 4 h est distincte des features : `log(close[t+4h] / close[t])`. Aucune donnée
-postérieure à la clôture de t ne peut entrer dans les features. Les fenêtres d'historique insuffisantes
-produisent des valeurs manquantes à écarter pour l'entraînement et l'inférence, sans les remplacer
+La cible rendement à 4 h est distincte des features : pour une ligne `(symbole, t)`, c'est
+`log(close[symbole, t+4h] / close[symbole, t])`. La bougie cible est recherchée pour le même symbole
+à l'horodatage exact `t+4h` ; on ne décale pas la fenêtre vers la prochaine bougie disponible. Si la
+bougie de départ ou celle à `t+4h` est absente, ou si la bougie cible n'est pas encore clôturée, la cible
+est manquante (`NaN`). Ces lignes sont exclues de l'entraînement, mais une cible manquante n'empêche
+pas de calculer ni de servir les features de la bougie t.
+
+La cible utilise une donnée future uniquement comme étiquette d'entraînement ou de feedback ; elle
+n'entre jamais dans les features. Aucune donnée postérieure à la clôture de t ne peut entrer dans les
+features. Les fenêtres d'historique insuffisantes produisent des features manquantes, sans les remplacer
 par des valeurs calculées à partir du futur. En production, la bougie t n'est utilisée que si elle est
 clôturée ; la bougie ouverte est ignorée.
 
