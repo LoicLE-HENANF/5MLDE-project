@@ -28,6 +28,7 @@ def test_build_features_returns_ordered_numeric_features_and_identifiers():
 
     assert result.columns.tolist() == ['symbol', 'open_time', *FEATURE_COLUMNS]
     assert result[['symbol', 'open_time']].equals(candles[['symbol', 'open_time']])
+    assert all(pd.api.types.is_numeric_dtype(result[column]) for column in FEATURE_COLUMNS)
     assert result['symbol_BTCUSDT'].eq(1).all()
     assert result['symbol_ETHUSDT'].eq(0).all()
     assert result.loc[1, 'return_1h'] == pytest.approx(np.log(102 / 101))
@@ -88,6 +89,24 @@ def test_open_candles_are_excluded_and_do_not_affect_previous_features():
     assert result['open_time'].tolist() == candles.loc[:1, 'open_time'].tolist()
 
 
+def test_future_candle_changes_do_not_change_features_at_earlier_hours():
+    candles = _candles(180)
+    changed = candles.copy()
+    future = changed['open_time'] >= changed.loc[170, 'open_time']
+    changed.loc[future, ['open', 'high', 'low', 'close']] *= 10
+    changed.loc[future, ['volume', 'quote_volume', 'trades']] *= 100
+    changed.loc[future, ['taker_buy_base_volume', 'taker_buy_quote_volume']] *= 100
+
+    original_features = build_features(candles, as_of=_as_of_after(candles))
+    changed_features = build_features(changed, as_of=_as_of_after(changed))
+
+    earlier = original_features['open_time'] < candles.loc[170, 'open_time']
+    pd.testing.assert_frame_equal(
+        original_features.loc[earlier].reset_index(drop=True),
+        changed_features.loc[earlier].reset_index(drop=True),
+    )
+
+
 def test_missing_hour_is_not_treated_as_an_adjacent_observation():
     candles = _candles(10).drop(index=5).reset_index(drop=True)
 
@@ -96,6 +115,18 @@ def test_missing_hour_is_not_treated_as_an_adjacent_observation():
 
     assert np.isnan(hour_after_gap['return_1h'])
     assert np.isnan(hour_after_gap['realized_vol_6h'])
+
+
+def test_zero_volume_uses_zero_ratios_and_short_history_stays_missing():
+    candles = _candles(26)
+    candles.loc[:24, ['quote_volume', 'taker_buy_quote_volume', 'trades']] = 0
+
+    result = build_features(candles, as_of=_as_of_after(candles))
+
+    assert np.isnan(result.loc[23, 'quote_volume_ratio_24h'])
+    assert result.loc[24, 'quote_volume_ratio_24h'] == 0
+    assert result.loc[24, 'trade_count_ratio_24h'] == 0
+    assert result.loc[24, 'taker_buy_ratio'] == 0
 
 
 def test_duplicate_symbol_and_hour_is_rejected():
