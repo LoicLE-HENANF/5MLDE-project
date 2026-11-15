@@ -92,6 +92,11 @@ Définition des données : bougies horaires Binance spot pour `BTCUSDT`, `ETHUSD
 | `marketdata.quality` | Règles qualité : bloquantes (schéma, doublons, alignement, OHLC, volumes, variation > 50 %) ou signalées (bougies manquantes jusqu'à 1 %, variation > 20 %) |
 | `marketdata.identity` | Identité d'un jeu de données : symboles, période, lignes, SHA-256 du contenu (tags `data.*`) |
 
+## Paquet `features`
+
+Le calcul des variables et des cibles est séparé dans `features.build` et `features.targets`.
+L'API publique reste disponible depuis le paquet : `from features import build_features, target_return`.
+
 ## Paquet `training`
 
 `training.splits.walk_forward_splits` produit des indices positionnels pour des folds expansifs :
