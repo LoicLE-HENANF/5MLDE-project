@@ -28,7 +28,7 @@ from lineage.errors import ProvenanceError
 DISTRIBUTION = '5MLDE-project'
 # Paquets importables du projet, copiés dans chaque modèle (tenu aligné sur
 # [tool.hatch.build.targets.wheel].packages par tests/test_provenance.py).
-PACKAGES = ('connectors', 'features', 'flows', 'ingestion', 'lineage', 'marketdata')
+PACKAGES = ('connectors', 'features', 'flows', 'ingestion', 'lineage', 'marketdata', 'training')
 
 TAG_PREFIX = 'code.'
 REQUIRED_TAGS = ('version', 'git_ref', 'sha256', 'dirty', 'editable')

@@ -209,7 +209,8 @@ intégrés de bout en bout.
   `V` (`t + H >= V`) sont purgés. On réserve également avant `V` un embargo d'au moins `H` sans exemples
   d'entraînement ; en pratique, la séparation configurée vaut donc 4 h pour rendement et 24 h pour volatilité.
 - **Test final** : les trois derniers mois calendaires disponibles sont réservés au test final. Aucun fold de
-  validation ne les chevauche ; ils ne servent ni au choix des features, ni aux hyperparamètres, ni aux seuils.
+  validation ne les chevauche ; les exemples de validation dont la cible atteindrait le début du test final
+  sont aussi exclus. Ils ne servent ni au choix des features, ni aux hyperparamètres, ni aux seuils.
   Le test final est exécuté une seule fois par version candidate pour le backtest et la décision de promotion.
 
 Les features sont calculées uniquement avec l'information disponible à l'instant t, pour éviter le *look-ahead*.
