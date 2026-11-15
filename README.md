@@ -67,8 +67,9 @@ uv run python -m connectors.health mlflow postgres
 
 Chaque run et chaque modèle MLflow porte la provenance du code qui l'a produit (tags `code.*`) :
 version calculée depuis git (`0.2.0` = tag `v0.2.0`, `0.2.1.devN+g<sha>` = commit, suffixe
-`.d<date>` = arbre modifié), empreinte SHA-256 des paquets `connectors`, `lineage` et `marketdata` et des
-dépendances installées. Le code du paquet et la liste exacte des dépendances sont embarqués dans le modèle.
+`.d<date>` = arbre modifié), empreinte SHA-256 des paquets du projet (`connectors`, `features`, `flows`,
+`ingestion`, `lineage` et `marketdata`) et des dépendances installées. Le code des paquets et la liste
+exacte des dépendances sont embarqués dans le modèle.
 
 `register_model` refuse un modèle dont le code n'est pas identifiable de façon fiable : arbre
 git modifié ou installation éditable. Pour produire un modèle publiable :
@@ -90,6 +91,17 @@ Définition des données : bougies horaires Binance spot pour `BTCUSDT`, `ETHUSD
 | `marketdata.schema` | Schéma pandera d'une bougie normalisée (types, unités, bornes) |
 | `marketdata.quality` | Règles qualité : bloquantes (schéma, doublons, alignement, OHLC, volumes, variation > 50 %) ou signalées (bougies manquantes jusqu'à 1 %, variation > 20 %) |
 | `marketdata.identity` | Identité d'un jeu de données : symboles, période, lignes, SHA-256 du contenu (tags `data.*`) |
+
+## Paquet `features`
+
+Le calcul des variables et des cibles est séparé dans `features.build` et `features.targets`.
+L'API publique reste disponible depuis le paquet : `from features import build_features, target_return`.
+
+## Paquet `training`
+
+`training.splits.walk_forward_splits` produit des indices positionnels pour des folds expansifs :
+12 mois initiaux, validations mensuelles, embargo au moins égal à l'horizon et trois derniers mois
+réservés au test final. Les lignes sans cible sont exclues si `target_column` est fourni.
 
 ## Tests
 

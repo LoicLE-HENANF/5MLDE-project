@@ -110,6 +110,45 @@ s'abstenir. La stratégie simulée combine les deux.
 Des modèles simples avec scikit-learn : **Ridge** comme référence linéaire et **HistGradientBoostingRegressor**
 comme candidat. La comparaison entre les deux illustre la règle de promotion.
 
+### Spécification initiale des features (V1)
+
+Une ligne d'entraînement ou d'inférence représente un couple **(symbole, heure t)**. Les features
+sont calculées après la clôture de la bougie t, à partir de cette bougie et des précédentes. Les prix
+bruts ne sont pas utilisés : les rendements et ratios rendent les entrées comparables entre actifs.
+
+| Famille | Features V1 | Définition |
+|---|---|---|
+| Momentum | `return_1h`, `return_4h`, `return_12h`, `return_24h`, `return_72h`, `return_168h` | Rendement logarithmique `log(close[t] / close[t-h])` |
+| Volatilité réalisée | `realized_vol_6h`, `realized_vol_24h`, `realized_vol_72h`, `realized_vol_168h` | Racine de la somme des carrés des rendements horaires disponibles jusqu'à t, sur h heures |
+| Forme de la bougie | `candle_range`, `candle_body`, `close_location` | Respectivement `log(high/low)`, `log(close/open)` et `(2*close-high-low)/(high-low)` ; `close_location` vaut 0 si `high == low` |
+| Activité | `quote_volume_ratio_24h`, `taker_buy_ratio`, `trade_count_ratio_24h` | Volume quote et nombre de transactions rapportés à leur médiane des 24 heures précédentes ; part du volume quote achetée par des takers |
+| Contexte transversal | `market_return_{1h,4h,24h}`, `relative_return_{1h,4h,24h}` | Médiane des rendements des cinq symboles à l'horizon h ; rendement du symbole moins cette médiane |
+| Temps | `hour_sin`, `hour_cos`, `weekday_sin`, `weekday_cos` | Encodage cyclique de l'heure et du jour de semaine UTC de la bougie t |
+| Identité | `symbol` | Symbole parmi les cinq de l'univers ; encodage explicite en colonnes indicatrices pour les modèles scikit-learn |
+
+Les rapports d'activité sont calculés avec la médiane des bougies **strictement antérieures à t** ; si
+elle est nulle, le ratio vaut 0. Le ratio acheteur est `taker_buy_quote_volume / quote_volume` ;
+il vaut 0 quand `quote_volume` est nul. Les features transversales sont calculées à heure identique,
+sur les symboles disponibles ; la ligne est marquée non exploitable si le symbole lui-même est absent.
+
+La cible rendement à 4 h est distincte des features : pour une ligne `(symbole, t)`, c'est
+`log(close[symbole, t+4h] / close[symbole, t])`. La bougie cible est recherchée pour le même symbole
+à l'horodatage exact `t+4h` ; on ne décale pas la fenêtre vers la prochaine bougie disponible. Si la
+bougie de départ ou celle à `t+4h` est absente, ou si la bougie cible n'est pas encore clôturée, la cible
+est manquante (`NaN`). Ces lignes sont exclues de l'entraînement, mais une cible manquante n'empêche
+pas de calculer ni de servir les features de la bougie t.
+
+La cible utilise une donnée future uniquement comme étiquette d'entraînement ou de feedback ; elle
+n'entre jamais dans les features. Aucune donnée postérieure à la clôture de t ne peut entrer dans les
+features. Les fenêtres d'historique insuffisantes produisent des features manquantes, sans les remplacer
+par des valeurs calculées à partir du futur. En production, la bougie t n'est utilisée que si elle est
+clôturée ; la bougie ouverte est ignorée.
+
+Cette V1 est volontairement limitée aux informations déjà présentes dans les bougies. Elle exclut
+les indicateurs techniques redondants, les données externes et toute sélection de variables fondée
+sur la période de test finale. La même liste ordonnée de features devra être utilisée à l'entraînement
+et à l'inférence.
+
 ## 4 bis. Stratégies ≠ modèles
 
 Une **stratégie** est une règle de décision appliquée aux prédictions. Ce n'est pas un modèle.
@@ -158,14 +197,23 @@ intégrés de bout en bout.
 
 ### Validation
 
-**Walk-forward** : on entraîne sur le passé et on teste sur la période suivante, en glissant dans le temps. Un intervalle sans données
-(*embargo*) d'au moins l'horizon de la cible sépare l'entraînement du test. **Jamais de split aléatoire.**
-Les features sont calculées uniquement avec l'information disponible à l'instant t, pour éviter le *look-ahead*.
+**Règle V1 des folds walk-forward** — tous les horodatages sont en UTC et aucune séparation aléatoire n'est utilisée :
 
-- **Cibles qui se chevauchent** : le rendement à 4 h de deux bougies voisines partage 3 h. Les exemples dont la cible
-  déborde sur la période de validation sont retirés de l'entraînement (*purge*), en plus de l'embargo.
-- **Période de test finale** (ex. les 3 derniers mois) : jamais utilisée pendant la mise au point (features, hyperparamètres,
-  seuils), évaluée **une seule fois** par version candidate. C'est sur elle que tournent le backtest et la décision de promotion.
+- **Fenêtres** : entraînement expansif depuis le début de l'historique (2022-01), avec au moins 12 mois
+  d'historique avant le premier fold. Chaque validation couvre un mois calendaire complet ; le fold suivant
+  avance d'un mois et ajoute le mois précédent à l'entraînement. Le premier mois de validation est donc
+  2023-01 si les données requises sont disponibles.
+- **Panel multi-symboles** : toutes les lignes ayant le même `open_time` sont affectées au même côté du fold.
+- **Horizon et séparation** : `H = 4 h` pour la cible rendement et `H = 24 h` pour la cible volatilité.
+  Pour une validation commençant à `V`, les exemples d'entraînement dont la fenêtre cible atteint ou dépasse
+  `V` (`t + H >= V`) sont purgés. On réserve également avant `V` un embargo d'au moins `H` sans exemples
+  d'entraînement ; en pratique, la séparation configurée vaut donc 4 h pour rendement et 24 h pour volatilité.
+- **Test final** : les trois derniers mois calendaires disponibles sont réservés au test final. Aucun fold de
+  validation ne les chevauche ; les exemples de validation dont la cible atteindrait le début du test final
+  sont aussi exclus. Ils ne servent ni au choix des features, ni aux hyperparamètres, ni aux seuils.
+  Le test final est exécuté une seule fois par version candidate pour le backtest et la décision de promotion.
+
+Les features sont calculées uniquement avec l'information disponible à l'instant t, pour éviter le *look-ahead*.
 - **Mêmes features à l'entraînement et à l'inférence** : un seul module de calcul, embarqué dans le modèle avec le code.
 - **Bougie en cours ignorée** : seule une bougie clôturée sert de feature ; la bougie ouverte renvoyée par l'API REST est écartée.
 
@@ -237,7 +285,8 @@ Le niveau 1 sélectionne, le niveau 2 valide, le niveau 3 confirme. Une version 
 - [x] Interrupteur : **application de pilotage** + état en base via l'API.
 - [x] Application : Streamlit (à revoir à l'implémentation).
 - [ ] 3e modèle `opportunite` (classifieur) : optionnel, à décider après l'intégration des deux premiers.
-- [ ] Durée de la période de test finale (3 mois proposés) et durée de la phase `challenger`.
+- [x] Durée de la période de test finale : les trois derniers mois calendaires disponibles.
+- [ ] Durée de la phase `challenger`.
 - [ ] Seuil de dérive (PSI) déclenchant un réentraînement.
 
 **Ordre de travail** : un circuit complet simple (ingestion → entraînement → inférence → retours → Grafana) avec le modèle
