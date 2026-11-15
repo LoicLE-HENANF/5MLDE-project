@@ -197,14 +197,22 @@ intégrés de bout en bout.
 
 ### Validation
 
-**Walk-forward** : on entraîne sur le passé et on teste sur la période suivante, en glissant dans le temps. Un intervalle sans données
-(*embargo*) d'au moins l'horizon de la cible sépare l'entraînement du test. **Jamais de split aléatoire.**
-Les features sont calculées uniquement avec l'information disponible à l'instant t, pour éviter le *look-ahead*.
+**Règle V1 des folds walk-forward** — tous les horodatages sont en UTC et aucune séparation aléatoire n'est utilisée :
 
-- **Cibles qui se chevauchent** : le rendement à 4 h de deux bougies voisines partage 3 h. Les exemples dont la cible
-  déborde sur la période de validation sont retirés de l'entraînement (*purge*), en plus de l'embargo.
-- **Période de test finale** (ex. les 3 derniers mois) : jamais utilisée pendant la mise au point (features, hyperparamètres,
-  seuils), évaluée **une seule fois** par version candidate. C'est sur elle que tournent le backtest et la décision de promotion.
+- **Fenêtres** : entraînement expansif depuis le début de l'historique (2022-01), avec au moins 12 mois
+  d'historique avant le premier fold. Chaque validation couvre un mois calendaire complet ; le fold suivant
+  avance d'un mois et ajoute le mois précédent à l'entraînement. Le premier mois de validation est donc
+  2023-01 si les données requises sont disponibles.
+- **Panel multi-symboles** : toutes les lignes ayant le même `open_time` sont affectées au même côté du fold.
+- **Horizon et séparation** : `H = 4 h` pour la cible rendement et `H = 24 h` pour la cible volatilité.
+  Pour une validation commençant à `V`, les exemples d'entraînement dont la fenêtre cible atteint ou dépasse
+  `V` (`t + H >= V`) sont purgés. On réserve également avant `V` un embargo d'au moins `H` sans exemples
+  d'entraînement ; en pratique, la séparation configurée vaut donc 4 h pour rendement et 24 h pour volatilité.
+- **Test final** : les trois derniers mois calendaires disponibles sont réservés au test final. Aucun fold de
+  validation ne les chevauche ; ils ne servent ni au choix des features, ni aux hyperparamètres, ni aux seuils.
+  Le test final est exécuté une seule fois par version candidate pour le backtest et la décision de promotion.
+
+Les features sont calculées uniquement avec l'information disponible à l'instant t, pour éviter le *look-ahead*.
 - **Mêmes features à l'entraînement et à l'inférence** : un seul module de calcul, embarqué dans le modèle avec le code.
 - **Bougie en cours ignorée** : seule une bougie clôturée sert de feature ; la bougie ouverte renvoyée par l'API REST est écartée.
 
@@ -276,7 +284,8 @@ Le niveau 1 sélectionne, le niveau 2 valide, le niveau 3 confirme. Une version 
 - [x] Interrupteur : **application de pilotage** + état en base via l'API.
 - [x] Application : Streamlit (à revoir à l'implémentation).
 - [ ] 3e modèle `opportunite` (classifieur) : optionnel, à décider après l'intégration des deux premiers.
-- [ ] Durée de la période de test finale (3 mois proposés) et durée de la phase `challenger`.
+- [x] Durée de la période de test finale : les trois derniers mois calendaires disponibles.
+- [ ] Durée de la phase `challenger`.
 - [ ] Seuil de dérive (PSI) déclenchant un réentraînement.
 
 **Ordre de travail** : un circuit complet simple (ingestion → entraînement → inférence → retours → Grafana) avec le modèle
