@@ -213,6 +213,20 @@ intégrés de bout en bout.
   sont aussi exclus. Ils ne servent ni au choix des features, ni aux hyperparamètres, ni aux seuils.
   Le test final est exécuté une seule fois par version candidate pour le backtest et la décision de promotion.
 
+**Règle V1 de `holdout_split`** — le découpage final reprend les mêmes conventions temporelles :
+
+- Le début du holdout est le premier jour UTC du mois correspondant aux trois derniers mois calendaires
+  disponibles (mois de la dernière observation inclus). Le holdout contient les observations de cette date
+  jusqu'à la dernière observation disponible.
+- L'entraînement utilise les observations antérieures au holdout, après purge des lignes dont la cible atteint
+  ou dépasse son début (`t + H >= holdout_start`). Aucun exemple d'entraînement n'est retenu dans
+  l'intervalle `[holdout_start - embargo, holdout_start)`, avec un embargo d'au moins `H`.
+  `H` vaut 4 h pour le rendement et 24 h pour la volatilité.
+- Le découpage conserve ensemble toutes les lignes d'un même `open_time`. Si une colonne cible est fournie,
+  les lignes dont la cible est indisponible (`NaN`) sont exclues des deux ensembles ; cela retire notamment
+  les cibles incomplètes en fin d'historique.
+- Le splitter renvoie des indices positionnels. Il échoue explicitement si l'un des deux ensembles est vide.
+
 Les features sont calculées uniquement avec l'information disponible à l'instant t, pour éviter le *look-ahead*.
 - **Mêmes features à l'entraînement et à l'inférence** : un seul module de calcul, embarqué dans le modèle avec le code.
 - **Bougie en cours ignorée** : seule une bougie clôturée sert de feature ; la bougie ouverte renvoyée par l'API REST est écartée.

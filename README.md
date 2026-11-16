@@ -100,8 +100,10 @@ L'API publique reste disponible depuis le paquet : `from features import build_f
 ## Paquet `training`
 
 `training.splits.walk_forward_splits` produit des indices positionnels pour des folds expansifs :
-12 mois initiaux, validations mensuelles, embargo au moins égal à l'horizon et trois derniers mois
-réservés au test final. Les lignes sans cible sont exclues si `target_column` est fourni.
+12 mois initiaux, validations mensuelles et trois derniers mois réservés au test final.
+`training.splits.holdout_split` renvoie les indices positionnels d'entraînement et de ce test final.
+Les deux fonctions appliquent un embargo au moins égal à l'horizon et excluent les lignes sans cible
+si `target_column` est fourni.
 
 ## Tests
 
