@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from features import target_return
+from features import target_return, target_volatility
 from marketdata.sources import normalize
 from tests.conftest import raw_rows
 
@@ -73,3 +73,57 @@ def test_duplicate_symbol_and_hour_is_rejected():
 
     with pytest.raises(ValueError, match='doublons'):
         target_return(duplicate, as_of=_as_of_after(candles))
+
+
+def test_target_volatility_uses_exact_hourly_returns_and_keeps_symbols_separate():
+    btc = _candles(30)
+    eth = _candles(30, symbol='ETHUSDT')
+    eth.loc[:, ['open', 'high', 'low', 'close']] = [500, 501, 499, 500]
+    candles = pd.concat([btc, eth], ignore_index=True)
+
+    result = target_volatility(candles, as_of=_as_of_after(candles))
+
+    assert result.columns.tolist() == ['symbol', 'open_time', 'target_volatility']
+    btc_target = result.loc[result['symbol'].eq('BTCUSDT')].reset_index(drop=True)
+    eth_target = result.loc[result['symbol'].eq('ETHUSDT')].reset_index(drop=True)
+    hourly_returns = np.log(btc['close'].iloc[1:25].to_numpy() / btc['close'].iloc[:24].to_numpy())
+    assert btc_target.loc[0, 'target_volatility'] == pytest.approx(np.sqrt(np.square(hourly_returns).sum()))
+    assert eth_target.loc[0, 'target_volatility'] == pytest.approx(0)
+    assert btc_target['target_volatility'].iloc[-24:].isna().all()
+
+
+def test_missing_intermediate_candle_makes_volatility_target_missing_without_shifting():
+    candles = _candles(32).drop(index=5).reset_index(drop=True)
+
+    result = target_volatility(candles, as_of=_as_of_after(candles))
+
+    assert pd.isna(result.loc[0, 'target_volatility'])
+    assert pd.notna(result.loc[5, 'target_volatility'])
+
+
+def test_volatility_target_is_unavailable_until_all_future_candles_are_closed():
+    candles = _candles(26)
+    target_close_time = candles.loc[24, 'close_time']
+
+    at_close = target_volatility(candles, as_of=target_close_time)
+    after_close = target_volatility(
+        candles,
+        as_of=target_close_time + pd.Timedelta(microseconds=1),
+    )
+
+    assert pd.isna(at_close.loc[0, 'target_volatility'])
+    assert pd.notna(after_close.loc[0, 'target_volatility'])
+
+
+@pytest.mark.parametrize('hours', [0, -1, True, 1.5])
+def test_invalid_volatility_horizon_is_rejected(hours):
+    with pytest.raises(ValueError, match='entier positif'):
+        target_volatility(_candles(2), hours=hours)
+
+
+def test_duplicate_symbol_and_hour_is_rejected_for_volatility_target():
+    candles = _candles(5)
+    duplicate = pd.concat([candles, candles.iloc[[0]]], ignore_index=True)
+
+    with pytest.raises(ValueError, match='doublons'):
+        target_volatility(duplicate, as_of=_as_of_after(candles))
