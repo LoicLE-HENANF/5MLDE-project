@@ -7,7 +7,7 @@ from features.constants import (
     IDENTIFIER_COLUMNS,
     SYMBOL_FEATURE_COLUMNS,
 )
-from features.targets import target_return
+from features.targets import target_return, target_volatility
 
 __all__ = [
     'BASE_FEATURE_COLUMNS',
@@ -16,4 +16,5 @@ __all__ = [
     'SYMBOL_FEATURE_COLUMNS',
     'build_features',
     'target_return',
+    'target_volatility',
 ]
