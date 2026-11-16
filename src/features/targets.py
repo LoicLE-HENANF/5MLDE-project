@@ -42,3 +42,49 @@ def target_return(
     result = ordered.loc[:, list(IDENTIFIER_COLUMNS)].copy()
     result['target_return'] = values
     return result
+
+
+def target_volatility(
+    candles: pd.DataFrame, hours: int = 24, *, as_of: datetime | pd.Timestamp | None = None
+) -> pd.DataFrame:
+    """Calcule la volatilité réalisée future exacte par symbole, sans franchir de lacune.
+
+    Chaque ligne conserve ses identifiants `(symbol, open_time)` et reçoit la colonne
+    `target_volatility = sqrt(sum(r[k] ** 2 for k in 1..hours))`, où chaque `r[k]`
+    est le rendement logarithmique horaire jusqu'à `t + k`. La cible vaut NaN si la
+    bougie de départ ou une bougie future requise n'est pas clôturée à `as_of`, ou si
+    une bougie exacte est absente.
+    """
+    if isinstance(hours, bool) or not isinstance(hours, int) or hours < 1:
+        raise ValueError(f'hours doit être un entier positif, reçu : {hours!r}')
+    validate(candles)
+    if candles.duplicated(['symbol', 'open_time']).any():
+        raise ValueError('doublons sur la clé (symbol, open_time)')
+
+    cutoff = closed_as_of(as_of)
+    ordered = candles.sort_values(['symbol', 'open_time'], ignore_index=True)
+    closed = ordered.loc[ordered['close_time'] < cutoff]
+    closes = closed.set_index(['symbol', 'open_time'])['close']
+    valid = ordered['close_time'].lt(cutoff).to_numpy(copy=True)
+    previous_closes = ordered['close'].to_numpy(dtype='float64')
+    squared_returns = np.zeros(len(ordered), dtype='float64')
+
+    for step in range(1, hours + 1):
+        target_times = ordered['open_time'] + pd.Timedelta(hours=step)
+        target_keys = pd.MultiIndex.from_arrays(
+            [ordered['symbol'], target_times], names=['symbol', 'open_time']
+        )
+        future_closes = closes.reindex(target_keys).to_numpy(dtype='float64')
+        step_valid = np.isfinite(future_closes) & np.isfinite(previous_closes)
+        valid &= step_valid
+        squared_returns[step_valid] += np.square(
+            np.log(future_closes[step_valid] / previous_closes[step_valid])
+        )
+        previous_closes = future_closes
+
+    values = np.full(len(ordered), np.nan, dtype='float64')
+    values[valid] = np.sqrt(squared_returns[valid])
+
+    result = ordered.loc[:, list(IDENTIFIER_COLUMNS)].copy()
+    result['target_volatility'] = values
+    return result

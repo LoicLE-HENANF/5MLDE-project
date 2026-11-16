@@ -144,6 +144,17 @@ features. Les fenêtres d'historique insuffisantes produisent des features manqu
 par des valeurs calculées à partir du futur. En production, la bougie t n'est utilisée que si elle est
 clôturée ; la bougie ouverte est ignorée.
 
+La cible volatilité à 24 h est distincte des features : pour une ligne `(symbole, t)`, elle vaut
+`sqrt(r[1] ** 2 + r[2] ** 2 + ... + r[24] ** 2)`, où
+`r[k] = log(close[symbole, t+k] / close[symbole, t+k-1])`.
+Elle utilise les 24 rendements horaires exacts jusqu'à `t+24h`, pour le même symbole. La bougie de
+départ et chacune des 24 bougies suivantes doivent être présentes et clôturées à `as_of` (leur
+`close_time < as_of`) ; si une bougie manque ou n'est pas encore clôturée, la cible est `NaN`. On ne
+décale pas la fenêtre pour contourner une lacune. La fonction `target_volatility` conserve les
+identifiants `(symbol, open_time)`, ajoute `target_volatility`, et accepte un horizon entier positif
+en heures, égal à 24 par défaut. `as_of` est facultatif et vaut par défaut l'instant courant en UTC.
+Une cible manquante n'empêche pas de calculer ni de servir les features de la bougie t.
+
 Cette V1 est volontairement limitée aux informations déjà présentes dans les bougies. Elle exclut
 les indicateurs techniques redondants, les données externes et toute sélection de variables fondée
 sur la période de test finale. La même liste ordonnée de features devra être utilisée à l'entraînement
