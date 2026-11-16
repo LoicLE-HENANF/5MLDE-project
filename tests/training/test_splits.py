@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from training import walk_forward_splits
+from training import holdout_split, walk_forward_splits
 
 
 @pytest.fixture
@@ -106,3 +106,81 @@ def test_duplicate_symbol_timestamp_is_rejected(panel):
 
     with pytest.raises(ValueError, match='doublons'):
         walk_forward_splits(duplicate, target_column='target')
+
+
+def test_holdout_uses_last_three_months_and_purges_training_labels(panel):
+    train, holdout = holdout_split(panel, target_column='target')
+    train_times = _times(panel, train)
+    holdout_times = _times(panel, holdout)
+    holdout_start = pd.Timestamp('2023-04-01', tz='UTC')
+
+    assert train_times.max() == pd.Timestamp('2023-03-31 19:00', tz='UTC')
+    assert (train_times + pd.Timedelta(hours=4) < holdout_start).all()
+    assert holdout_times.min() == holdout_start
+    assert holdout_times.max() == pd.Timestamp('2023-06-30 23:00', tz='UTC')
+    assert set(train_times).isdisjoint(holdout_times)
+
+
+def test_holdout_keeps_symbols_together_and_respects_the_horizon(panel):
+    train, holdout = holdout_split(
+        panel,
+        horizon=pd.Timedelta(hours=24),
+        target_column='target',
+    )
+    train_rows = panel.iloc[train]
+    holdout_rows = panel.iloc[holdout]
+
+    assert _times(panel, train).max() == pd.Timestamp('2023-03-30 23:00', tz='UTC')
+    assert train_rows.groupby('open_time')['symbol'].nunique().eq(2).all()
+    assert holdout_rows.groupby('open_time')['symbol'].nunique().eq(2).all()
+
+
+def test_holdout_respects_embargo_longer_than_horizon(panel):
+    train, _ = holdout_split(
+        panel,
+        horizon=pd.Timedelta(hours=4),
+        embargo=pd.Timedelta(hours=12),
+        target_column='target',
+    )
+
+    assert _times(panel, train).max() == pd.Timestamp('2023-03-31 11:00', tz='UTC')
+
+
+def test_holdout_excludes_rows_with_missing_targets(panel):
+    frame = panel.copy()
+    missing_train = (frame['symbol'] == 'BTCUSDT') & (
+        frame['open_time'] == pd.Timestamp('2023-03-01', tz='UTC')
+    )
+    missing_holdout = (frame['symbol'] == 'ETHUSDT') & (
+        frame['open_time'] == pd.Timestamp('2023-04-01', tz='UTC')
+    )
+    frame.loc[missing_train | missing_holdout, 'target'] = float('nan')
+
+    train, holdout = holdout_split(frame, target_column='target')
+
+    assert not missing_train.iloc[train].any()
+    assert not missing_holdout.iloc[holdout].any()
+
+
+def test_holdout_rejects_embargo_shorter_than_horizon(panel):
+    with pytest.raises(ValueError, match='supérieur ou égal'):
+        holdout_split(
+            panel,
+            horizon=pd.Timedelta(hours=4),
+            embargo=pd.Timedelta(hours=3),
+            target_column='target',
+        )
+
+
+def test_holdout_rejects_empty_training_or_test_set(panel):
+    recent = panel.loc[panel['open_time'] >= pd.Timestamp('2023-04-01', tz='UTC')]
+    with pytest.raises(ValueError, match='train vide'):
+        holdout_split(recent, target_column='target')
+
+    missing_holdout_targets = panel.copy()
+    missing_holdout_targets.loc[
+        missing_holdout_targets['open_time'] >= pd.Timestamp('2023-04-01', tz='UTC'),
+        'target',
+    ] = float('nan')
+    with pytest.raises(ValueError, match='holdout vide'):
+        holdout_split(missing_holdout_targets, target_column='target')
