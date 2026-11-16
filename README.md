@@ -95,7 +95,8 @@ Définition des données : bougies horaires Binance spot pour `BTCUSDT`, `ETHUSD
 ## Paquet `features`
 
 Le calcul des variables et des cibles est séparé dans `features.build` et `features.targets`.
-L'API publique reste disponible depuis le paquet : `from features import build_features, target_return`.
+L'API publique reste disponible depuis le paquet :
+`from features import build_features, target_return, target_volatility`.
 
 ## Paquet `training`
 
