@@ -104,7 +104,8 @@ L'API publique reste disponible depuis le paquet :
 12 mois initiaux, validations mensuelles et trois derniers mois réservés au test final.
 `training.splits.holdout_split` renvoie les indices positionnels d'entraînement et de ce test final.
 Les deux fonctions appliquent un embargo au moins égal à l'horizon et excluent les lignes sans cible
-si `target_column` est fourni.
+si `target_column` est fourni. `training.metrics.information_coefficient` calcule l'IC de Spearman
+transversal par horodatage ; `training.metrics.icir` calcule l'ICIR d'une série d'IC.
 
 ## Tests
 
