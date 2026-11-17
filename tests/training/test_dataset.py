@@ -9,7 +9,7 @@ from features import FEATURE_COLUMNS
 from marketdata.identity import identify
 from marketdata.sources import normalize
 from tests.conftest import raw_rows
-from training import prepare_return_inputs
+from training import prepare_return_dataset, prepare_return_inputs
 
 
 def _candles(rows: int = 180) -> pd.DataFrame:
@@ -46,3 +46,33 @@ def test_prepare_return_inputs_rejects_blocking_quality_issues():
 def test_prepare_return_inputs_requires_timezone_aware_as_of():
     with pytest.raises(ValueError, match='fuseau horaire'):
         prepare_return_inputs(_candles(), as_of=pd.Timestamp('2025-01-02'))
+
+
+def test_prepare_return_dataset_joins_on_identifiers_and_filters_incomplete_rows():
+    candles = _candles()
+    as_of = candles['close_time'].max() + pd.Timedelta(microseconds=1)
+
+    result = prepare_return_dataset(candles, as_of=as_of)
+
+    assert result.frame.columns.tolist() == [
+        'symbol',
+        'open_time',
+        *FEATURE_COLUMNS,
+        'target_return',
+    ]
+    assert len(result.frame) == 8
+    assert result.frame['open_time'].min() == candles.loc[168, 'open_time']
+    assert result.frame['open_time'].max() == candles.loc[175, 'open_time']
+    assert result.frame[[*FEATURE_COLUMNS, 'target_return']].notna().all().all()
+    assert 'target_return' not in FEATURE_COLUMNS
+    assert result.identity == identify(candles)
+    assert result.quality_report.ok
+    assert result.as_of == as_of
+
+
+def test_prepare_return_dataset_rejects_empty_usable_rows():
+    candles = _candles(170)
+    as_of = candles['close_time'].max() + pd.Timedelta(microseconds=1)
+
+    with pytest.raises(ValueError, match='aucune ligne exploitable'):
+        prepare_return_dataset(candles, as_of=as_of)
