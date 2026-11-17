@@ -100,6 +100,9 @@ L'API publique reste disponible depuis le paquet :
 
 ## Paquet `training`
 
+`training.dataset.prepare_return_inputs` contrôle et identifie le jeu de bougies, puis calcule séparément
+les features et la cible 4 h au même instant de référence. Leur jointure et le filtrage des lignes utiles
+restent à effectuer avant l'entraînement.
 `training.splits.walk_forward_splits` produit des indices positionnels pour des folds expansifs :
 12 mois initiaux, validations mensuelles et trois derniers mois réservés au test final.
 `training.splits.holdout_split` renvoie les indices positionnels d'entraînement et de ce test final.
