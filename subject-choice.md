@@ -244,6 +244,16 @@ Les features sont calculées uniquement avec l'information disponible à l'insta
 
 ### Trois niveaux d'évaluation
 
+**Règle V1 des métriques du modèle `rendement`** :
+
+- Pour chaque `open_time`, l'IC est la corrélation de Spearman transversale entre les prédictions et les
+  rendements réalisés, calculée sur les symboles ayant les deux valeurs disponibles. Il faut au moins trois
+  symboles et une variation dans les deux séries ; sinon l'IC de cette heure est `NaN`.
+- `information_coefficient` renvoie une série d'IC indexée par `open_time`. Pour un fold, la moyenne des IC
+  ignore les valeurs `NaN`.
+- L'ICIR d'un fold vaut la moyenne des IC divisée par leur écart-type d'échantillon (`ddof=1`), sans
+  annualisation. Il vaut `NaN` s'il reste moins de deux IC définis ou si leur écart-type est nul.
+
 | Niveau | Quand | Données | Métriques | Sert à |
 |---|---|---|---|---|
 | 1. Statistique | Pendant l'entraînement | Folds walk-forward | IC, ICIR (rendement) ; QLIKE (volatilité) | Choisir features et hyperparamètres |
