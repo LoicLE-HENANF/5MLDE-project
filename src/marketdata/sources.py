@@ -101,7 +101,29 @@ def normalize(rows: Iterable[Sequence[Any]], symbol: str) -> pd.DataFrame:
     """Lignes brutes (archive ou REST) → bougies normalisées, triées par `open_time`.
 
     Le champ `ignore` est retiré, le symbole ajouté en première colonne. Lève
-    SourceFormatError si une ligne n'a pas 12 champs ou contient une valeur non numérique.
+    SourceFormatError si une ligne n'a pas 12 champs, contient une valeur non numérique
+    ou si une bougie ne dure pas exactement une heure (bougies interrompues comprises).
+    """
+    frame, interrupted = normalize_dropping_interrupted(rows, symbol)
+    if interrupted:
+        raise SourceFormatError(
+            f'{check_symbol(symbol)} : {len(interrupted)} bougie(s) dont close_time ne correspond pas à '
+            f'un intervalle de {INTERVAL} (première : {interrupted[0]})'
+        )
+    return frame
+
+
+def normalize_dropping_interrupted(
+    rows: Iterable[Sequence[Any]], symbol: str
+) -> tuple[pd.DataFrame, tuple[pd.Timestamp, ...]]:
+    """Comme `normalize`, mais retire les bougies interrompues au lieu de lever.
+
+    Une bougie interrompue se termine avant la fin de son heure (`open_time <= close_time
+    < open_time + 1 h - 1 ms`) : Binance l'émet quand le trading s'arrête en cours d'heure,
+    par exemple le 2023-03-24 à 12:00 UTC (clôture à 12:39, volume nul). Elle ne décrit
+    pas une heure complète, elle est donc écartée ; ses `open_time` sont renvoyés pour être
+    tracés. Toute autre durée (clôture avant l'ouverture ou après la fin de l'heure)
+    reste une erreur de format.
     """
     symbol = check_symbol(symbol)
     rows = list(rows)
@@ -123,15 +145,20 @@ def normalize(rows: Iterable[Sequence[Any]], symbol: str) -> pd.DataFrame:
     # Toute autre durée signale un mauvais intervalle ; la valeur est ensuite ramenée à
     # open + 1 h - 1 µs pour qu'une même bougie soit identique quelle que soit sa source.
     end = frame['open_time'] + INTERVAL_DELTA
-    wrong = ~frame['close_time'].between(end - pd.Timedelta(milliseconds=1), end - _ONE_US)
+    complete_from = end - pd.Timedelta(milliseconds=1)
+    complete = frame['close_time'].between(complete_from, end - _ONE_US)
+    interrupted = (frame['close_time'] >= frame['open_time']) & (frame['close_time'] < complete_from)
+    wrong = ~(complete | interrupted)
     if wrong.any():
         raise SourceFormatError(
             f'{symbol} : {int(wrong.sum())} bougie(s) dont close_time ne correspond pas à '
             f'un intervalle de {INTERVAL} (première : {frame.loc[wrong, "open_time"].iloc[0]})'
         )
-    frame['close_time'] = end - _ONE_US
-    frame.insert(0, 'symbol', pd.Series([symbol] * len(frame), dtype='str'))
-    return frame.sort_values('open_time', ignore_index=True)
+    dropped = tuple(sorted(frame.loc[interrupted, 'open_time']))
+    frame = frame.loc[complete].copy()
+    frame['close_time'] = frame['open_time'] + INTERVAL_DELTA - _ONE_US
+    frame.insert(0, 'symbol', pd.Series([symbol] * len(frame), index=frame.index, dtype='str'))
+    return frame.sort_values('open_time', ignore_index=True), dropped
 
 
 def to_utc(values: pd.Series) -> pd.Series:
