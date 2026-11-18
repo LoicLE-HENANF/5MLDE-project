@@ -48,6 +48,21 @@ def long_short(predictions: pd.DataFrame, column: str = 'prediction') -> pd.Data
     return weights.fillna(0.0)
 
 
+def staggered(weights: pd.DataFrame, hours: int) -> pd.DataFrame:
+    """Portefeuille en tranches : moyenne des poids des `hours` dernières heures.
+
+    Une prévision à h heures donne une position tenue h heures : chaque heure, une tranche de 1/h
+    du capital est réallouée selon la nouvelle prévision, les autres gardent leurs poids. Le
+    turnover est divisé par h environ ; un long/short reste neutre au marché, d'exposition brute <= 1.
+    """
+    if isinstance(hours, bool) or not isinstance(hours, int) or hours < 1:
+        raise ValueError(f'hours doit être un entier positif : {hours!r}')
+    if not isinstance(weights.index, pd.DatetimeIndex):
+        raise ValueError('les poids doivent être indexés par heure')
+    ordered = weights.sort_index().fillna(0.0)
+    return ordered.rolling(pd.Timedelta(hours=hours), min_periods=1).mean()
+
+
 def long_cash(
     predictions: pd.DataFrame, column: str = 'prediction', threshold: float = DEFAULT_FEE
 ) -> pd.DataFrame:

@@ -13,6 +13,7 @@ from strategies import (
     long_short,
     next_returns,
     scale_by_volatility,
+    staggered,
     to_wide,
 )
 
@@ -39,6 +40,29 @@ def _candles(closes: dict[str, list[float]]) -> pd.DataFrame:
 
 
 # -- positions ---------------------------------------------------------------------------------
+def test_staggered_averages_the_last_hours_and_cuts_turnover():
+    signs = [1, -1, 1, -1, 1, -1, 1, -1]
+    rows = [(s, h, sign * (1 if s == 'A' else -1)) for h, sign in enumerate(signs) for s in ('A', 'B')]
+    hourly = long_short(_predictions(rows))
+    held = staggered(hourly, 4)
+
+    assert held.loc[T0, 'A'] == pytest.approx(0.5)  # une seule heure connue
+    assert held.loc[T0 + 3 * HOUR, 'A'] == pytest.approx(0.0)  # deux heures longues, deux courtes
+    assert (held.sum(axis=1).abs() < 1e-12).all()  # reste neutre au marché
+    assert (held.abs().sum(axis=1) <= 1 + 1e-12).all()
+    assert held.diff().abs().sum().sum() < hourly.diff().abs().sum().sum() / 2
+    assert staggered(hourly, 1).equals(hourly.sort_index())
+
+
+def test_staggered_rejects_bad_inputs():
+    hourly = long_short(_predictions([('A', 0, 0.1), ('B', 0, 0.2)]))
+    for hours in (0, -1, 1.5, True):
+        with pytest.raises(ValueError, match='entier positif'):
+            staggered(hourly, hours)
+    with pytest.raises(ValueError, match='indexés par heure'):
+        staggered(hourly.reset_index(drop=True), 4)
+
+
 def test_to_wide_rejects_bad_inputs():
     good = _predictions([('A', 0, 0.1)])
     with pytest.raises(ValueError, match='absentes'):

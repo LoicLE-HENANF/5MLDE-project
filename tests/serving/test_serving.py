@@ -115,7 +115,7 @@ def test_predict_latest_returns_signed_forecasts_and_long_short_positions():
     latest = latest_features(candles, as_of=_as_of(candles))
 
     forecast = predict_latest_returns(
-        lambda rows: np.array([-0.01, 0.02]),
+        lambda rows: np.tile([-0.01, 0.02], len(rows) // 2),
         candles,
         as_of=_as_of(candles),
     )
@@ -126,6 +126,22 @@ def test_predict_latest_returns_signed_forecasts_and_long_short_positions():
     )
     assert forecast.frame['position'].sum() == pytest.approx(0.0)
     assert forecast.frame['position'].abs().sum() == pytest.approx(1.0)
+
+
+def test_predict_latest_returns_holds_positions_over_the_horizon():
+    candles = _candles()
+    newest = latest_features(candles, as_of=_as_of(candles))['open_time'].max()
+
+    def flip(rows):
+        # signal inversé à la dernière heure seulement : une tranche sur quatre suit le nouveau signal
+        return np.tile([0.02, -0.01], len(rows) // 2) * (1 - 2 * (np.arange(len(rows)) >= len(rows) - 2))
+
+    held = predict_latest_returns(flip, candles, as_of=_as_of(candles)).frame
+    fresh = predict_latest_returns(flip, candles, as_of=_as_of(candles), horizon_hours=1).frame
+
+    assert held['open_time'].eq(newest).all()
+    assert fresh['position'].tolist() == pytest.approx([-0.5, 0.5])
+    assert held['position'].tolist() == pytest.approx([0.25, -0.25])
 
 
 def test_predict_latest_serves_only_symbols_up_to_date():
