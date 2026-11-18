@@ -53,6 +53,14 @@ def _issue_rows(issues: tuple[Issue, ...]) -> list[dict[str, Any]]:
     ]
 
 
+def _interrupted_issues(open_times: tuple[pd.Timestamp, ...]) -> tuple[Issue, ...]:
+    """Bougies interrompues écartées à la normalisation : signalées, non bloquantes."""
+    if not open_times:
+        return ()
+    examples = tuple(str(t) for t in open_times[: quality.MAX_EXAMPLES])
+    return (Issue('bougie interrompue écartée', False, len(open_times), examples),)
+
+
 def closed_only(frame: pd.DataFrame, now: datetime) -> pd.DataFrame:
     """Bougies clôturées à `now` (close_time strictement passé)."""
     return frame[frame['close_time'] < now].reset_index(drop=True)
@@ -132,10 +140,10 @@ class BatchProcessor:
             if fetched is None:
                 return BatchResult('archive', symbol, start, end, 'unavailable')
             raw, checksum = fetched
-            frame = sources.normalize(raw, symbol)
+            frame, interrupted = sources.normalize_dropping_interrupted(raw, symbol)
         except (DownloadError, sources.SourceFormatError) as exc:
             return self._finish('archive', symbol, start, end, issues=self._fetch_failure(exc))
-        issues = quality.check(frame).issues
+        issues = _interrupted_issues(interrupted) + quality.check(frame).issues
         outside = int(((frame['open_time'] < start) | (frame['open_time'] >= end)).sum())
         if outside:
             issues += (Issue('bougies hors du mois', True, outside),)
@@ -158,7 +166,8 @@ class BatchProcessor:
             raise RuntimeError('CandleTable requise pour les bougies récentes')
         try:
             raw = self.client.recent_rows(symbol, start, now)
-            frame = closed_only(sources.normalize(raw, symbol), now)
+            frame, interrupted = sources.normalize_dropping_interrupted(raw, symbol)
+            frame = closed_only(frame, now)
         except (DownloadError, sources.SourceFormatError) as exc:
             return self._finish('rest', symbol, start, now, issues=self._fetch_failure(exc))
         payload = '\n'.join(','.join(map(str, row)) for row in raw).encode()
@@ -168,7 +177,7 @@ class BatchProcessor:
             start,
             now,
             frame=frame,
-            issues=quality.check(frame).issues if len(frame) else (),
+            issues=_interrupted_issues(interrupted) + (quality.check(frame).issues if len(frame) else ()),
             source_sha256=hashlib.sha256(payload).hexdigest(),
             write=self.table.upsert,
         )

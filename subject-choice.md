@@ -75,6 +75,38 @@ Deux modes, sélectionnés par la configuration :
 - Checksum de l'archive différent de celui publié.
 - Valeurs aberrantes (rendement horaire extrême) : signalées, ou bloquantes au-delà d'un seuil.
 
+#### Bougies interrompues (décision du 2026-11-18)
+
+Le premier chargement complet de l'historique a rejeté le mois de mars 2023 pour les cinq symboles. Une seule
+bougie était en cause : celle du **2023-03-24 à 12:00 UTC**, dont le `close_time` tombe à 12:39:41 au lieu de
+12:59:59.999. Son volume et son nombre de transactions sont nuls. Elle correspond à l'arrêt du trading spot sur
+Binance ce jour-là : la bougie a été interrompue en cours d'heure. La bougie de 13:00 est absente de l'archive
+(743 lignes au lieu de 744), le trading n'ayant pas repris pendant cette heure.
+
+Trois options ont été envisagées :
+1. garder le rejet et laisser mars 2023 manquant (un mois de trou, flow d'ingestion en échec à chaque relance) ;
+2. écarter uniquement les bougies interrompues et les tracer comme anomalie non bloquante ;
+3. traiter cette date comme une exception codée en dur.
+
+**Choix : option 2.** Une bougie interrompue ne décrit pas une heure complète. La conserver fausserait les
+rendements, les volumes et la volatilité. La rejeter avec tout le mois ferait perdre 742 heures valides pour une
+seule heure invalide. Une exception codée en dur ne couvrirait pas le prochain incident du même type.
+
+Règle appliquée (`marketdata.sources.normalize_dropping_interrupted`, utilisée par l'ingestion) :
+- `close_time` dans l'heure mais avant sa fin (`open_time ≤ close_time < open_time + 1 h − 1 ms`) : bougie
+  **interrompue**, retirée du lot et tracée dans `tracing.ingestion_batches` (règle `bougie interrompue écartée`,
+  non bloquante, avec les `open_time` concernés) ;
+- `close_time` avant l'ouverture ou après la fin de l'heure : toujours une **erreur de format bloquante** ;
+- l'heure retirée devient une bougie manquante, couverte par la règle des trous (bloquante seulement au-delà de
+  1 % du lot). Les features sont calculées sur une grille horaire complète : les lignes touchées par le trou ont des
+  valeurs manquantes et sont exclues des jeux d'entraînement.
+
+`marketdata.sources.normalize` reste strict (il lève sur toute bougie interrompue) pour les usages qui ne passent
+pas par l'ingestion tracée.
+
+Résultat du rechargement : mars 2023 accepté pour les cinq symboles avec 742 bougies (12:00 écartée, 13:00
+absente), les deux heures signalées comme anomalies non bloquantes.
+
 ## 4. Combien de modèles ?
 
 **Proposition : 2 modèles**, chacun entraîné sur l'ensemble des 5 symboles.

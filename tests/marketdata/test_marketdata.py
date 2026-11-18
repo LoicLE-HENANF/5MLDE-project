@@ -99,6 +99,23 @@ def test_normalize_rejects_bad_rows(mutate, match):
         sources.normalize(rows, 'BTCUSDT')
 
 
+def test_interrupted_candles_are_dropped_and_reported():
+    rows = raw_rows(3)
+    rows[1][6] = str(int(rows[1][0]) + 39 * 60_000)  # clôture à +39 min : trading arrêté
+    frame, interrupted = sources.normalize_dropping_interrupted(rows, 'BTCUSDT')
+    assert len(frame) == 2
+    assert interrupted == (pd.Timestamp(int(rows[1][0]), unit='ms', tz='UTC'),)
+    assert (frame['close_time'] == frame['open_time'] + pd.Timedelta(hours=1, microseconds=-1)).all()
+
+
+@pytest.mark.parametrize('offset_ms', [-1, HOUR_MS])
+def test_close_time_outside_the_hour_stays_a_format_error(offset_ms):
+    rows = raw_rows(2)
+    rows[1][6] = str(int(rows[1][0]) + offset_ms)
+    with pytest.raises(sources.SourceFormatError, match='close_time'):
+        sources.normalize_dropping_interrupted(rows, 'BTCUSDT')
+
+
 def test_normalize_rejects_unknown_symbol():
     with pytest.raises(ValueError, match='hors univers'):
         sources.normalize(raw_rows(1), 'DOGEUSDT')

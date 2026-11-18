@@ -93,6 +93,19 @@ def test_signalled_issues_do_not_block(tmp_path):
     assert recorder.calls[0]['issues'][0]['blocking'] is False
 
 
+def test_interrupted_candle_dropped_and_signalled(tmp_path):
+    # arrêt du trading en cours d'heure (cas Binance du 2023-03-24) : clôture à +39 min
+    rows = raw_rows(31 * 24)
+    rows[5][6] = str(int(rows[5][0]) + 39 * 60_000)
+    processor, recorder = make(tmp_path, FakeClient(archive=rows))
+    result = processor.archive_month('BTCUSDT', JAN)
+    assert result.accepted and result.rows == 743
+    issues = recorder.calls[0]['issues']
+    assert issues[0]['rule'] == 'bougie interrompue écartée' and issues[0]['blocking'] is False
+    assert issues[0]['count'] == 1
+    assert len(processor.parquet.read()) == 743
+
+
 def test_blocking_issue_rejects_without_writing(tmp_path):
     rows = raw_rows(31 * 24)
     rows.append(rows[0])
