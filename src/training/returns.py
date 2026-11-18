@@ -21,7 +21,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from features import FEATURE_COLUMNS
-from strategies import DEFAULT_FEE, BacktestResult, backtest, long_cash, long_short, to_wide
+from strategies import DEFAULT_FEE, BacktestResult, backtest, long_cash, long_short, staggered, to_wide
 from training import return_figures
 from training.dataset import ReturnTrainingDataset, prepare_return_dataset
 from training.metrics import icir, information_coefficient
@@ -240,7 +240,12 @@ def strategy_backtests(
     candidate: str,
     fee: float = DEFAULT_FEE,
 ) -> dict[str, BacktestResult]:
-    """Backteste long/short et long/cash, face à l'équipondéré brut et au momentum."""
+    """Backteste long/short et long/cash, face à l'équipondéré brut et au momentum.
+
+    Les positions sont tenues `HORIZON_HOURS` heures (portefeuille en tranches, `staggered`) :
+    la cible est un rendement à 4 h, réallouer tout le capital chaque heure paierait des frais
+    sans rapport avec l'horizon prédit. Le nombre de tranches est fixé par l'horizon, pas réglé.
+    """
     identifiers = holdout.loc[:, ['symbol', 'open_time']].reset_index(drop=True)
     presence = to_wide(identifiers.assign(prediction=1.0)).notna()
     raw = presence.astype('float64').div(presence.sum(axis=1), axis=0).fillna(0.0)
@@ -249,8 +254,8 @@ def strategy_backtests(
     for predictor, values in forecasts.items():
         predictions = identifiers.assign(prediction=np.asarray(values, dtype='float64'))
         positions = {
-            f'{predictor}_long_short': long_short(predictions),
-            f'{predictor}_long_cash': long_cash(predictions, threshold=DEFAULT_FEE),
+            f'{predictor}_long_short': staggered(long_short(predictions), HORIZON_HOURS),
+            f'{predictor}_long_cash': staggered(long_cash(predictions, threshold=DEFAULT_FEE), HORIZON_HOURS),
         }
         results.update({name: backtest(weights, candles, fee=fee) for name, weights in positions.items()})
     expected = {f'{candidate}_long_short', f'{candidate}_long_cash'}

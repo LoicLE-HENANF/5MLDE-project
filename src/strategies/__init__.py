@@ -7,6 +7,7 @@ from strategies.positions import (
     long_cash,
     long_short,
     scale_by_volatility,
+    staggered,
     to_wide,
 )
 
@@ -19,6 +20,7 @@ __all__ = [
     'long_short',
     'next_returns',
     'scale_by_volatility',
+    'staggered',
     'summarize',
     'to_wide',
 ]

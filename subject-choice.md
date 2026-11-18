@@ -315,6 +315,10 @@ Le niveau 1 sélectionne, le niveau 2 valide, le niveau 3 confirme. Une version 
   (prédictions tracées, sans positions réelles) pendant N jours ; elle est promue si son niveau 3 confirme le niveau 2.
 - **Retour arrière automatique** : si l'IC glissant mesuré en production reste sous 0 pendant N jours, **ou** si le gain/perte
   glissant de la stratégie long/short simulée reste négatif sur la même fenêtre, l'alias de production revient à la version précédente et une alerte est envoyée.
+  *Décision du 2026-11-18* : on garde ce seuil absolu pour `rendement`. Frais inclus, le gain/perte est négatif presque
+  tous les jours : une version qui ne gagne pas d'argent après frais n'a pas sa place en production, et le retour arrière
+  est le comportement voulu. La version 1 est promue à la main pour la démonstration (raison tracée dans `tracing.model_events`) ;
+  sans version `precedent`, le retour arrière est impossible et seul un avertissement est tracé.
 - **Retour arrière manuel** : une seule commande (ou un bouton de l'application) remet l'alias `champion` sur la version
   précédente et l'enregistre dans `tracing.model_events`.
 - **Réentraînement** : planifié, et aussi déclenché par la **dérive** des features (PSI au-delà d'un seuil) ou par une baisse du niveau 3.

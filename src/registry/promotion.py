@@ -55,7 +55,7 @@ def decide(*, level1: bool, level2: bool, score: float, champion_score: float | 
         return Decision(None, ('niveau 1 échoué : ne bat pas la meilleure référence naïve',))
     reasons = ['niveau 1 validé']
     if not level2:
-        reasons.append('niveau 2 échoué : la stratégie ne bat pas celle de la persistance')
+        reasons.append('niveau 2 échoué : la stratégie ne bat pas celles des références')
         return Decision(CHALLENGER, tuple(reasons))
     reasons.append('niveau 2 validé')
     if champion_score is not None and not score < champion_score:

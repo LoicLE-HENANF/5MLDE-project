@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from features import FEATURE_COLUMNS, build_features
-from strategies import long_short, scale_by_volatility, to_wide
+from strategies import long_short, scale_by_volatility, staggered, to_wide
 
 # Fenêtre (en heures) sur laquelle est mesurée la volatilité cible de la stratégie.
 TARGET_WINDOW_HOURS = 30 * 24
@@ -103,11 +103,17 @@ def predict_latest_returns(
     *,
     as_of: datetime | pd.Timestamp | None = None,
     with_positions: bool = True,
+    horizon_hours: int = 4,
 ) -> Forecast:
-    """Prédit le rendement futur à 4 h et construit les positions long/short."""
+    """Prédit le rendement futur à 4 h et construit les positions long/short.
+
+    La position servie est celle du portefeuille en tranches de l'entraînement : moyenne des
+    poids long/short des `horizon_hours` dernières heures, recalculés avec le même modèle.
+    """
     stamp = pd.Timestamp.now(tz='UTC') if as_of is None else pd.Timestamp(as_of)
     if stamp.tzinfo is None:
         raise ValueError('as_of doit inclure un fuseau horaire')
+    features = build_features(candles, as_of=stamp)
     latest = latest_features(candles, as_of=stamp)
     newest = latest['open_time'].max()
     latest = latest.loc[latest['open_time'] == newest].reset_index(drop=True)
@@ -121,7 +127,15 @@ def predict_latest_returns(
     frame['baseline'] = latest['return_4h'].to_numpy(dtype='float64')
     frame['position'] = np.nan
     if with_positions:
-        keys = frame.loc[:, ['symbol', 'open_time']]
-        weights = long_short(keys.assign(prediction=predicted))
+        window = newest - pd.Timedelta(hours=horizon_hours)
+        recent = features.dropna(subset=list(FEATURE_COLUMNS))
+        recent = recent.loc[(recent['open_time'] > window) & (recent['open_time'] <= newest)]
+        recent = recent.loc[recent['symbol'].isin(frame['symbol'])].sort_values(['open_time', 'symbol'])
+        recent = recent.reset_index(drop=True)
+        past = np.asarray(predict(recent.loc[:, list(FEATURE_COLUMNS)]), dtype='float64')
+        if past.shape != (len(recent),) or not np.isfinite(past).all():
+            raise ValueError('le modèle doit renvoyer un rendement fini par symbole')
+        keys = recent.loc[:, ['symbol', 'open_time']]
+        weights = staggered(long_short(keys.assign(prediction=past)), horizon_hours)
         frame['position'] = frame['symbol'].map(weights.loc[newest]).astype('float64')
     return Forecast(frame=frame, as_of=stamp)
