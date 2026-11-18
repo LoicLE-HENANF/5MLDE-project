@@ -1,0 +1,185 @@
+apiVersion: 1
+
+# Règles d'alerte du projet, évaluées par Grafana toutes les 5 min sur les mêmes sources que
+# les dashboards. Elles s'affichent dans l'interface (Alerting > Alert rules) ; aucun canal
+# externe (mail, Teams...) n'est branché pour l'instant. Une requête sans ligne compte comme OK.
+groups:
+  - orgId: 1
+    name: projet-5mlde
+    folder: Projet 5MLDE
+    interval: 5m
+    rules:
+      - uid: alerte-flow-echec
+        title: Flow Prefect en échec
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        labels: {projet: 5mlde, gravite: critique}
+        annotations:
+          summary: Au moins un flow Prefect a échoué ou planté dans la dernière heure.
+          description: "Voir le dashboard Traitements (Derniers flows Prefect) et les logs du run dans l'UI Prefect."
+          __dashboardUid__: projet-traitements
+          __panelId__: '1'
+        data:
+          - refId: A
+            relativeTimeRange: {from: 3600, to: 0}
+            datasourceUid: projet-prefect
+            model:
+              refId: A
+              editorMode: code
+              rawQuery: true
+              format: table
+              rawSql: >-
+                SELECT count(*) AS echecs FROM flow_run
+                WHERE state_type IN ('FAILED', 'CRASHED') AND COALESCE(end_time, start_time) > now() - interval '1 hour'
+          - &reduce
+            refId: B
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last, settings: {mode: dropNN}}
+          - &above-zero
+            refId: C
+            datasourceUid: __expr__
+            model: {refId: C, type: threshold, expression: B, conditions: [{evaluator: {type: gt, params: [0]}}]}
+
+      - uid: alerte-lot-rejete
+        title: Lot d'ingestion rejeté
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        labels: {projet: 5mlde, gravite: avertissement}
+        annotations:
+          summary: Un lot de bougies a été rejeté par les contrôles qualité dans la dernière heure.
+          description: "Anomalies bloquantes dans tracing.ingestion_batches (dashboard Traitements, Lots rejetés ou signalés)."
+          __dashboardUid__: projet-traitements
+          __panelId__: '9'
+        data:
+          - refId: A
+            relativeTimeRange: {from: 3600, to: 0}
+            datasourceUid: projet-traces
+            model:
+              refId: A
+              editorMode: code
+              rawQuery: true
+              format: table
+              rawSql: >-
+                SELECT count(*) AS rejets FROM tracing.ingestion_batches
+                WHERE status = 'rejected' AND recorded_at > now() - interval '1 hour'
+          - *reduce
+          - *above-zero
+
+      - uid: alerte-donnees-perimees
+        title: Données de marché périmées
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: {projet: 5mlde, gravite: critique}
+        annotations:
+          summary: La dernière bougie en base a plus de 3 h alors que le système est en marche.
+          description: "Le flow ingest-candles ne tourne plus ou l'API Binance ne répond pas (dashboard Traitements)."
+          __dashboardUid__: projet-traitements
+          __panelId__: '3'
+        data:
+          - refId: A
+            relativeTimeRange: {from: 3600, to: 0}
+            datasourceUid: projet-traces
+            model:
+              refId: A
+              editorMode: code
+              rawQuery: true
+              format: table
+              rawSql: >-
+                SELECT CASE WHEN COALESCE((SELECT active FROM tracing.system_changes ORDER BY id DESC LIMIT 1), true)
+                THEN EXTRACT(EPOCH FROM now() - max(close_time)) / 3600 ELSE 0 END AS heures
+                FROM market.candles
+          - *reduce
+          - refId: C
+            datasourceUid: __expr__
+            model: {refId: C, type: threshold, expression: B, conditions: [{evaluator: {type: gt, params: [3]}}]}
+
+      - uid: alerte-previsions-absentes
+        title: Prévisions absentes
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: {projet: 5mlde, gravite: critique}
+        annotations:
+          summary: Aucune prévision du champion depuis plus de 3 h alors que le système est en marche.
+          description: "Le flow predict-volatility ne tourne plus ou n'a plus de champion (dashboard Service)."
+          __dashboardUid__: projet-service
+          __panelId__: '2'
+        data:
+          - refId: A
+            relativeTimeRange: {from: 3600, to: 0}
+            datasourceUid: projet-traces
+            model:
+              refId: A
+              editorMode: code
+              rawQuery: true
+              format: table
+              rawSql: >-
+                SELECT model_name AS modele,
+                CASE WHEN COALESCE((SELECT active FROM tracing.system_changes ORDER BY id DESC LIMIT 1), true)
+                THEN EXTRACT(EPOCH FROM now() - max(recorded_at)) / 3600 ELSE 0 END AS heures
+                FROM tracing.predictions WHERE mode = 'live' AND alias = 'champion' GROUP BY model_name
+          - *reduce
+          - refId: C
+            datasourceUid: __expr__
+            model: {refId: C, type: threshold, expression: B, conditions: [{evaluator: {type: gt, params: [3]}}]}
+
+      - uid: alerte-version-degradee
+        title: Version de modèle dégradée
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        labels: {projet: 5mlde, gravite: avertissement}
+        annotations:
+          summary: "Une version servie fait moins bien que la référence naïve sur sa fenêtre glissante (niveau 3)."
+          description: "Retour arrière automatique après 3 jours dégradés consécutifs (dashboard Service, Santé par version)."
+          __dashboardUid__: projet-service
+          __panelId__: '4'
+        data:
+          - refId: A
+            relativeTimeRange: {from: 86400, to: 0}
+            datasourceUid: projet-traces
+            model:
+              refId: A
+              editorMode: code
+              rawQuery: true
+              format: table
+              rawSql: >-
+                SELECT model_name || ' v' || version AS version, degraded::int AS degradee
+                FROM tracing.model_health
+                WHERE mode = 'live' AND day = (SELECT max(day) FROM tracing.model_health WHERE mode = 'live')
+          - *reduce
+          - *above-zero
+
+      - uid: alerte-systeme-arrete
+        title: Système arrêté
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        labels: {projet: 5mlde, gravite: info}
+        annotations:
+          summary: "L'interrupteur marche / arrêt est sur arrêt : ingestion, prévisions et retours sont suspendus."
+          description: "Relancer via POST /system/state de l'API (dashboard Service, Historique marche / arrêt ; bascule depuis l'application)."
+          __dashboardUid__: projet-service
+          __panelId__: '13'
+        data:
+          - refId: A
+            relativeTimeRange: {from: 3600, to: 0}
+            datasourceUid: projet-traces
+            model:
+              refId: A
+              editorMode: code
+              rawQuery: true
+              format: table
+              rawSql: >-
+                SELECT (NOT active)::int AS arrete FROM tracing.system_changes ORDER BY id DESC LIMIT 1
+          - *reduce
+          - *above-zero

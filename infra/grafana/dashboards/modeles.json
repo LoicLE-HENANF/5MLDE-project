@@ -1,0 +1,541 @@
+{
+  "uid": "projet-modeles",
+  "title": "Modèles",
+  "description": "Registre MLflow (alias, événements), test final et stratégies des entraînements.",
+  "tags": [
+    "5mlde"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "schemaVersion": 41,
+  "version": 1,
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "modele",
+        "label": "Modèle",
+        "type": "query",
+        "datasource": {
+          "uid": "projet-mlflow"
+        },
+        "query": "SELECT name FROM registered_models ORDER BY name",
+        "definition": "SELECT name FROM registered_models ORDER BY name",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "sort": 1,
+        "current": {},
+        "options": []
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "name": "Repères registre",
+        "datasource": {
+          "uid": "projet-traces"
+        },
+        "enable": true,
+        "iconColor": "purple",
+        "target": {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT recorded_at AS time, event || COALESCE(' ' || alias, '') || ' v' || version AS text, 'registre' AS tags FROM tracing.model_events WHERE model_name = '$modele' AND $__timeFilter(recorded_at)"
+        },
+        "rawQuery": "SELECT recorded_at AS time, event || COALESCE(' ' || alias, '') || ' v' || version AS text, 'registre' AS tags FROM tracing.model_events WHERE model_name = '$modele' AND $__timeFilter(recorded_at)"
+      }
+    ]
+  },
+  "links": [
+    {
+      "title": "Projet 5MLDE",
+      "type": "dashboards",
+      "tags": [
+        "5mlde"
+      ],
+      "asDropdown": true
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Alias du registre",
+      "description": "champion : version servie ; challenger : prédit en parallèle ; precedent : retour arrière.",
+      "datasource": {
+        "uid": "projet-mlflow"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-mlflow"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT a.alias, a.version, to_timestamp(v.creation_time / 1000.0) AS \"enregistrée\", (SELECT t.value FROM model_version_tags t WHERE t.name = v.name AND t.version = v.version AND t.key = 'code.version') AS \"code\", v.run_id FROM registered_model_aliases a JOIN model_versions v ON v.name = a.name AND v.version = a.version WHERE a.name = '$modele' ORDER BY a.alias"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "alias"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "champion": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "challenger": {
+                        "color": "blue",
+                        "index": 1
+                      },
+                      "precedent": {
+                        "color": "text",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Événements du registre",
+      "description": "",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT recorded_at AS \"date\", event AS \"événement\", alias, version, details::text AS \"détails\" FROM tracing.model_events WHERE model_name = '$modele' ORDER BY id DESC LIMIT 50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "événement"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "registered": {
+                        "color": "blue",
+                        "index": 0
+                      },
+                      "promoted": {
+                        "color": "green",
+                        "index": 1
+                      },
+                      "retired": {
+                        "color": "text",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 3,
+      "type": "barchart",
+      "title": "Test final du dernier entraînement",
+      "description": "Métriques test_* du dernier run du modèle (période de test final exclue de la sélection). QLIKE et MAE : plus bas = mieux.",
+      "datasource": {
+        "uid": "projet-mlflow"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 12,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-mlflow"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT substr(key, 6) AS \"mesure\", value FROM latest_metrics WHERE run_uuid = (SELECT r.run_uuid FROM runs r WHERE r.status = 'FINISHED' AND r.lifecycle_stage = 'active' AND EXISTS (SELECT 1 FROM tags m WHERE m.run_uuid = r.run_uuid AND m.key = 'modele' AND m.value = '$modele') ORDER BY r.start_time DESC LIMIT 1) AND key LIKE 'test\\_%' AND key NOT LIKE 'test\\_bat\\_%' ORDER BY key"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "xField": "mesure",
+        "showValue": "always",
+        "legend": {
+          "showLegend": false
+        },
+        "colorByField": "mesure"
+      }
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Stratégies simulées (dernier entraînement)",
+      "description": "Backtest sur le test final, frais inclus (paper trading).",
+      "datasource": {
+        "uid": "projet-mlflow"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 7,
+        "w": 12,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-mlflow"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT substring(key FROM '^strategie_(?:sharpe|total_return|max_drawdown)_(.*)$') AS \"stratégie\", max(value) FILTER (WHERE key LIKE 'strategie\\_sharpe\\_%') AS \"Sharpe\", max(value) FILTER (WHERE key LIKE 'strategie\\_total\\_return\\_%') AS \"rendement total\", max(value) FILTER (WHERE key LIKE 'strategie\\_max\\_drawdown\\_%') AS \"perte max\" FROM latest_metrics WHERE run_uuid = (SELECT r.run_uuid FROM runs r WHERE r.status = 'FINISHED' AND r.lifecycle_stage = 'active' AND EXISTS (SELECT 1 FROM tags m WHERE m.run_uuid = r.run_uuid AND m.key = 'modele' AND m.value = '$modele') ORDER BY r.start_time DESC LIMIT 1) AND key ~ '^strategie_(sharpe|total_return|max_drawdown)_' GROUP BY 1 ORDER BY 2 DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "rendement total|perte max"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sharpe"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Test final par entraînement",
+      "description": "Évolution des métriques du test final d'un entraînement à l'autre.",
+      "datasource": {
+        "uid": "projet-mlflow"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 24,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-mlflow"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "time_series",
+          "rawSql": "SELECT to_timestamp(r.start_time / 1000.0) AS time, substr(m.key, 6) AS metric, m.value FROM runs r JOIN latest_metrics m ON m.run_uuid = r.run_uuid WHERE r.status = 'FINISHED' AND r.lifecycle_stage = 'active' AND EXISTS (SELECT 1 FROM tags m WHERE m.run_uuid = r.run_uuid AND m.key = 'modele' AND m.value = '$modele') AND m.key LIKE 'test\\_%' AND m.key NOT LIKE 'test\\_bat\\_%' AND $__unixEpochFilter(r.start_time / 1000) ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "always",
+            "pointSize": 6,
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Entraînements",
+      "description": "Lien vers le run MLflow sur la colonne run.",
+      "datasource": {
+        "uid": "projet-mlflow"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 24,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-mlflow"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT to_timestamp(r.start_time / 1000.0) AS \"début\", r.name AS run, r.status AS \"statut\", round((r.end_time - r.start_time) / 1000.0, 1) AS \"durée (s)\", max(t.value) FILTER (WHERE t.key = 'candidat') AS candidat, max(t.value) FILTER (WHERE t.key = 'code.version') AS code, max(t.value) FILTER (WHERE t.key = 'code.dirty') AS \"code modifié\", left(max(t.value) FILTER (WHERE t.key = 'data.sha256'), 12) AS \"données\", r.experiment_id AS \"expérience\", r.run_uuid AS run_id FROM runs r LEFT JOIN tags t ON t.run_uuid = r.run_uuid WHERE r.lifecycle_stage = 'active' AND EXISTS (SELECT 1 FROM tags m WHERE m.run_uuid = r.run_uuid AND m.key = 'modele' AND m.value = '$modele') AND $__unixEpochFilter(r.start_time / 1000) GROUP BY r.run_uuid ORDER BY r.start_time DESC LIMIT 50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "statut"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "FINISHED": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "FAILED": {
+                        "color": "red",
+                        "index": 1
+                      },
+                      "RUNNING": {
+                        "color": "blue",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "run"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Ouvrir dans MLflow",
+                    "targetBlank": true,
+                    "url": "http://localhost:5000/#/experiments/${__data.fields[\"expérience\"]}/runs/${__data.fields.run_id}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    }
+  ]
+}

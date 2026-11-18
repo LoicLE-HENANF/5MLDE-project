@@ -23,6 +23,7 @@ docker compose down           # arrêt (ajouter -v pour repartir de volumes vide
 | PostgreSQL 18.6 | `localhost:5432` | Bases `mlops` (schéma `tracing`), `prefect`, `mlflow` |
 | Grafana 13.2.3 | http://localhost:3000 | Supervision (admin / `5mlde-project-admin` par défaut) |
 | API du projet | http://localhost:8000/docs | FastAPI : santé, prévisions, registre, marche/arrêt (image du projet) |
+| Application | http://localhost:8501 | Streamlit de pilotage, cliente de l'API uniquement (image du projet) |
 | Worker | — | Sert les déploiements Prefect planifiés (image du projet) |
 
 Tous les ports sont liés à `127.0.0.1` uniquement et se changent dans `.env`.
@@ -150,6 +151,48 @@ uv run python -m registry retour-arriere volatilite
 
 `POST /system/state` (ou l'interrupteur de l'application) arrête les flows planifiés : ils se
 terminent en `cancelled` dans `tracing.pipeline_runs`, sans rien écrire, jusqu'à la remise en marche.
+
+## Supervision (Grafana)
+
+Trois dashboards, dossier « Projet 5MLDE » (http://localhost:3000), versionnés dans
+`infra/grafana/dashboards/` et relus toutes les 30 s (le fichier fait foi, l'UI ne les modifie pas) :
+
+| Dashboard | Contenu |
+|---|---|
+| Traitements | Flows Prefect (états, durées), lots d'ingestion et anomalies qualité, journal `tracing.pipeline_runs`, fraîcheur et prix des bougies |
+| Modèles | Alias et événements du registre, test final et stratégies simulées du dernier entraînement, historique des runs avec lien vers MLflow |
+| Service | Prévisions du `champion` et du `challenger` face à la référence naïve, positions, retours, santé quotidienne (niveau 3), marche / arrêt |
+
+Les changements du registre et de l'interrupteur apparaissent en annotations sur les courbes.
+
+Les règles d'alerte (`infra/grafana/provisioning/alerting/alertes.yml`, chargées au démarrage de
+Grafana, évaluées toutes les 5 min) s'affichent dans Alerting > Alert rules ; aucun canal externe
+n'est branché pour l'instant.
+
+| Alerte | Déclenchement |
+|---|---|
+| Flow Prefect en échec | un flow `FAILED` ou `CRASHED` dans la dernière heure |
+| Lot d'ingestion rejeté | un lot rejeté par les contrôles qualité dans la dernière heure |
+| Données de marché périmées | dernière bougie de plus de 3 h, système en marche |
+| Prévisions absentes | aucune prévision du `champion` depuis 3 h, système en marche |
+| Version de modèle dégradée | une version moins bonne que la référence naïve le dernier jour de santé |
+| Système arrêté | l'interrupteur est sur arrêt (information) |
+
+## Application de pilotage (Streamlit)
+
+`src/app/` (http://localhost:8501, service `app` de `compose.yml`) est la console d'exploitation :
+elle passe uniquement par l'API (`API_URL`, défaut http://localhost:8000), ne lit aucune base et ne
+garde aucun état. Chaque action exige un opérateur (barre latérale) et une raison, toutes deux
+tracées par l'API.
+
+| Onglet | Contenu |
+|---|---|
+| Service | Santé des dépendances, interrupteur marche / arrêt (`POST /system/state`) et son historique |
+| Prévisions | Dernière prévision du `champion` ou du `challenger` par symbole, référence naïve, écart, position |
+| Modèles | Alias, santé quotidienne (niveau 3), événements du registre, promotion manuelle et retour arrière (avec confirmation) |
+
+Hors conteneur : `uv run python -m app` (options Streamlit en plus, ex. `--server.port 8502`).
+Grafana reste en lecture seule : l'interrupteur vit ici, Grafana n'affiche que les bascules.
 
 ## Tests
 

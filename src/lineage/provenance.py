@@ -32,6 +32,7 @@ DISTRIBUTION = '5MLDE-project'
 # [tool.hatch.build.targets.wheel].packages par tests/test_provenance.py).
 PACKAGES = (
     'api',
+    'app',
     'connectors',
     'features',
     'flows',
