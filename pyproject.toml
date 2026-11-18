@@ -16,6 +16,10 @@ dependencies = [
   "pandera>=0.36.0",
   "pyarrow>=25.0.1",
   "scikit-learn>=1.9",
+  # Métriques système des runs MLflow (log_system_metrics).
+  "psutil>=7.0",
+  # Graphiques joints aux runs MLflow (training.figures).
+  "matplotlib>=3.10",
 ]
 
 [dependency-groups]
@@ -41,6 +45,8 @@ packages = [
   "src/ingestion",
   "src/lineage",
   "src/marketdata",
+  "src/registry",
+  "src/strategies",
   "src/training",
 ]
 
@@ -65,4 +71,4 @@ select = ["E", "W", "F", "I", "B", "UP", "BLE", "SIM", "RUF"]
 quote-style = "single"
 
 [tool.ruff.lint.isort]
-known-first-party = ["connectors", "features", "flows", "ingestion", "lineage", "marketdata", "training"]
+known-first-party = ["connectors", "features", "flows", "ingestion", "lineage", "marketdata", "registry", "strategies", "training"]

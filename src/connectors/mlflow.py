@@ -14,8 +14,10 @@ dépendances) ; le modèle embarque le paquet `connectors` et ses dépendances �
 
 from __future__ import annotations
 
+import tempfile
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -36,7 +38,11 @@ PROJECT_TAG = '5mlde-project'
 _NOT_FOUND = {'RESOURCE_DOES_NOT_EXIST', 'INVALID_PARAMETER_VALUE'}
 
 
-REQUIREMENTS_ARTIFACT = 'provenance/requirements.txt'
+PROVENANCE_DIR = 'provenance'
+REQUIREMENTS_ARTIFACT = f'{PROVENANCE_DIR}/requirements.txt'
+CODE_ARCHIVE_NAME = 'code.zip'
+CODE_ARCHIVE_ARTIFACT = f'{PROVENANCE_DIR}/{CODE_ARCHIVE_NAME}'
+SYSTEM_METRICS_INTERVAL = 2.0  # secondes ; court car les entraînements durent peu
 
 
 class MlflowConnector:
@@ -95,15 +101,26 @@ class MlflowConnector:
     ) -> Iterator[mlflow.ActiveRun]:
         """Run actif (API fluide), tagué avec la provenance du code et ses dépendances épinglées.
 
-        Une exception dans le bloc termine le run en FAILED.
+        Le run reçoit l'archive du code exécuté (`provenance/code.zip`, même périmètre que le tag
+        `code.sha256`) et les métriques système (CPU, mémoire, disque, réseau) échantillonnées
+        toutes les `SYSTEM_METRICS_INTERVAL` secondes. Une exception dans le bloc termine le run en FAILED.
         """
         self.activate()
         code = provenance.current()
         all_tags = {'projet': PROJECT_TAG, **(tags or {}), **code.tags()}
+        mlflow.set_system_metrics_sampling_interval(SYSTEM_METRICS_INTERVAL)
+        mlflow.set_system_metrics_samples_before_logging(1)
         with mlflow.start_run(
-            experiment_id=self.experiment_id(), run_name=name, tags=all_tags, nested=nested
+            experiment_id=self.experiment_id(),
+            run_name=name,
+            tags=all_tags,
+            nested=nested,
+            log_system_metrics=True,
         ) as run:
             mlflow.log_text('\n'.join(code.requirements) + '\n', REQUIREMENTS_ARTIFACT)
+            with tempfile.TemporaryDirectory() as tmp:
+                archive = provenance.archive_tree(code.code_dirs, Path(tmp) / CODE_ARCHIVE_NAME)
+                mlflow.log_artifact(str(archive), PROVENANCE_DIR)
             self._run_provenance[run.info.run_id] = code
             try:
                 yield run

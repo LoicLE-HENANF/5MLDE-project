@@ -12,6 +12,11 @@ Chaque candidat appris (Ridge, HistGradientBoosting) et chaque référence reço
 MAE log-vol par fold. Le meilleur candidat (QLIKE moyen) est réentraîné sur toute la
 période hors test final, évalué une seule fois sur le test final, puis loggé dans MLflow
 avec l'identité des données et la provenance du code.
+
+Évaluation à deux niveaux sur le test final :
+- niveau 1 (statistique) : QLIKE du candidat inférieur à celui de la meilleure référence ;
+- niveau 2 (stratégie) : un portefeuille équipondéré dont l'exposition est ciblée par la
+  prévision (backtest frais inclus) a un Sharpe au moins égal au même ciblage par la persistance.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from typing import Any
 
 import mlflow
 import mlflow.pyfunc
@@ -28,11 +34,14 @@ import numpy as np
 import pandas as pd
 from sklearn.base import RegressorMixin
 from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.inspection import permutation_importance
 from sklearn.linear_model import Ridge
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from features import FEATURE_COLUMNS
+from strategies import DEFAULT_FEE, BacktestResult, backtest, scale_by_volatility, to_wide
+from training import figures
 from training.dataset import VolatilityTrainingDataset, prepare_volatility_dataset
 from training.metrics import log_volatility_mae, qlike
 from training.splits import holdout_split, walk_forward_splits
@@ -139,10 +148,23 @@ class TrainingResult:
     evaluation: Evaluation
     holdout: dict[str, dict[str, float]]
     dataset: VolatilityTrainingDataset
+    strategy: dict[str, dict[str, float]] = field(default_factory=dict)
+    # Données des graphiques du run (facultatives : absentes, le graphique correspondant est omis).
+    forecasts: pd.DataFrame | None = (
+        None  # test final : symbol, open_time, realise, une colonne par prédicteur
+    )
+    equity: dict[str, pd.Series] = field(default_factory=dict)  # valeur du portefeuille par stratégie
+    learning_curve: pd.DataFrame | None = None  # hgb par itération : train, validation, qlike_validation
+    importance: pd.Series | None = None  # importance par permutation sur le test final
 
     def beats_baselines(self) -> bool:
         best_baseline = min(self.holdout[name]['qlike'] for name in BASELINES)
         return self.holdout[self.candidate]['qlike'] < best_baseline
+
+    def beats_persistence_strategy(self) -> bool:
+        """Niveau 2 : le ciblage de volatilité piloté par le modèle fait au moins aussi bien
+        (Sharpe sur le test final) que le même ciblage piloté par la persistance."""
+        return self.strategy[self.candidate]['sharpe'] >= self.strategy['persistance']['sharpe']
 
 
 def fit_volatility_model(dataset: VolatilityTrainingDataset) -> TrainingResult:
@@ -159,12 +181,123 @@ def fit_volatility_model(dataset: VolatilityTrainingDataset) -> TrainingResult:
     model = LogVolatilityModel(_candidates()[candidate]).fit(train)
     realized = holdout[TARGET_COLUMN]
     scores = {name: score(baseline(train, holdout), realized) for name, baseline in BASELINES.items()}
-    scores[candidate] = score(model.predict(holdout), realized)
-    return TrainingResult(candidate, model, evaluation, scores, dataset)
+    predicted = model.predict(holdout)
+    scores[candidate] = score(predicted, realized)
+    forecasts = {'persistance': _persistence(train, holdout), candidate: predicted}
+    target = float(train[TARGET_COLUMN].median())
+    backtests = strategy_backtests(holdout, forecasts, target=target)
+    return TrainingResult(
+        candidate,
+        model,
+        evaluation,
+        scores,
+        dataset,
+        {name: result.metrics for name, result in backtests.items()},
+        forecasts=_holdout_forecasts(train, holdout, {candidate: predicted}),
+        equity={name: result.frame['equity'] for name, result in backtests.items()},
+        learning_curve=learning_curve(frame, hours=dataset.hours),
+        importance=feature_importance(model, holdout),
+    )
 
 
-def log_training(result: TrainingResult, connector, *, run_name: str = 'train-volatilite') -> str:
-    """Logge le run MLflow : paramètres, métriques par fold et test final, modèle sklearn."""
+def _holdout_forecasts(
+    train: pd.DataFrame, holdout: pd.DataFrame, learned: Mapping[str, np.ndarray]
+) -> pd.DataFrame:
+    """Prévisions de chaque prédicteur sur le test final, à côté de la volatilité réalisée."""
+    table = holdout.loc[:, ['symbol', 'open_time']].reset_index(drop=True)
+    table['realise'] = holdout[TARGET_COLUMN].to_numpy(dtype='float64')
+    for name, baseline in BASELINES.items():
+        table[name] = np.asarray(baseline(train, holdout), dtype='float64')
+    for name, values in learned.items():
+        table[name] = np.asarray(values, dtype='float64')
+    return table
+
+
+def learning_curve(frame: pd.DataFrame, *, hours: int = HORIZON_HOURS) -> pd.DataFrame | None:
+    """Courbe d'apprentissage de `hgb` sur le dernier fold walk-forward (test final exclu).
+
+    Par itération du boosting : perte du modèle (erreur quadratique sur le log de la volatilité)
+    en entraînement et en validation, et QLIKE en validation.
+    """
+    splits = walk_forward_splits(frame, horizon=timedelta(hours=hours), target_column=TARGET_COLUMN)
+    if not splits:
+        return None
+    train_index, validation_index = splits[-1]
+    train, validation = frame.iloc[train_index], frame.iloc[validation_index]
+    model = LogVolatilityModel(_candidates()['hgb']).fit(train)
+    estimator = model.estimator
+    columns = list(FEATURE_COLUMNS)
+    train_log = np.log(train[TARGET_COLUMN].to_numpy(dtype='float64'))
+    validation_log = np.log(validation[TARGET_COLUMN].to_numpy(dtype='float64'))
+    rows = []
+    stages = zip(
+        estimator.staged_predict(train.loc[:, columns]),
+        estimator.staged_predict(validation.loc[:, columns]),
+        strict=True,
+    )
+    for iteration, (train_pred, validation_pred) in enumerate(stages, start=1):
+        rows.append(
+            {
+                'iteration': iteration,
+                'train': float(np.mean((train_pred - train_log) ** 2)),
+                'validation': float(np.mean((validation_pred - validation_log) ** 2)),
+                'qlike_validation': qlike(np.exp(validation_pred), np.exp(validation_log)),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def feature_importance(model: LogVolatilityModel, holdout: pd.DataFrame, *, repeats: int = 3) -> pd.Series:
+    """Hausse de l'erreur quadratique (log-volatilité) sur le test final quand une feature est mélangée."""
+    importances = permutation_importance(
+        model.estimator,
+        holdout.loc[:, list(FEATURE_COLUMNS)],
+        np.log(holdout[TARGET_COLUMN].to_numpy(dtype='float64')),
+        scoring='neg_mean_squared_error',
+        n_repeats=repeats,
+        random_state=0,
+    )
+    return pd.Series(importances.importances_mean, index=list(FEATURE_COLUMNS)).sort_values(ascending=False)
+
+
+def strategy_scores(
+    holdout: pd.DataFrame, forecasts: Mapping[str, np.ndarray], *, target: float, fee: float = DEFAULT_FEE
+) -> dict[str, dict[str, float]]:
+    """Métriques de `strategy_backtests`."""
+    backtests = strategy_backtests(holdout, forecasts, target=target, fee=fee)
+    return {name: result.metrics for name, result in backtests.items()}
+
+
+def strategy_backtests(
+    holdout: pd.DataFrame, forecasts: Mapping[str, np.ndarray], *, target: float, fee: float = DEFAULT_FEE
+) -> dict[str, BacktestResult]:
+    """Niveau 2 : backtest sur le test final d'un portefeuille équipondéré acheteur dont
+    l'exposition est ciblée par chaque prévision de volatilité (`target` / prévision, sans levier).
+
+    `brut` est le même portefeuille sans ciblage. Les rendements horaires viennent de la feature
+    `return_1h` de la bougie suivante (aucune donnée hors du jeu d'entraînement).
+    """
+    candles = _candles_from_returns(holdout)
+    keys = holdout.loc[:, ['symbol', 'open_time']].reset_index(drop=True)
+    present = to_wide(keys.assign(prediction=1.0)).notna()
+    raw = present.astype('float64') / present.shape[1]
+    results = {'brut': backtest(raw, candles, fee=fee)}
+    for name, forecast in forecasts.items():
+        volatility = to_wide(keys.assign(prediction=np.asarray(forecast, dtype='float64')))
+        positions = scale_by_volatility(raw, volatility, target=target)
+        results[name] = backtest(positions, candles, fee=fee)
+    return results
+
+
+def _candles_from_returns(frame: pd.DataFrame) -> pd.DataFrame:
+    """Prix relatifs reconstruits par symbole : close(t) / close(t - 1 h) = exp(return_1h(t))."""
+    ordered = frame.loc[:, ['symbol', 'open_time', 'return_1h']].sort_values(['symbol', 'open_time'])
+    close = np.exp(ordered.groupby('symbol')['return_1h'].cumsum())
+    return ordered.loc[:, ['symbol', 'open_time']].assign(close=close.to_numpy()).reset_index(drop=True)
+
+
+def log_training(result: TrainingResult, connector, *, run_name: str = 'train-volatilite') -> tuple[str, Any]:
+    """Logge le run MLflow (paramètres, métriques, modèle) ; renvoie (run_id, ModelInfo)."""
     dataset = result.dataset
     tags = {**dataset.identity.tags(), 'modele': MODEL_NAME, 'candidat': result.candidate}
     with connector.start_run(run_name, tags=tags) as run:
@@ -190,18 +323,59 @@ def log_training(result: TrainingResult, connector, *, run_name: str = 'train-vo
             for metric, value in metrics.items():
                 mlflow.log_metric(f'test_{metric}_{predictor}', value)
         mlflow.log_metric('test_bat_references', float(result.beats_baselines()))
+        for strategy, metrics in result.strategy.items():
+            for metric, value in metrics.items():
+                mlflow.log_metric(f'strategie_{metric}_{strategy}', value)
+        if result.strategy:
+            mlflow.log_metric('strategie_bat_persistance', float(result.beats_persistence_strategy()))
         mlflow.log_text(json.dumps(list(FEATURE_COLUMNS), indent=2), 'features.json')
         mlflow.log_text(result.dataset.quality_report.summary(), 'qualite_donnees.txt')
+        for name, figure in figures.build(result).items():
+            mlflow.log_figure(figure, f'graphiques/{name}.png')
+        figures.close_all()
 
         sample = dataset.frame.loc[:, list(FEATURE_COLUMNS)].head(5)
-        connector.log_model(
+        info = connector.log_model(
             mlflow.pyfunc.log_model,
             name=MODEL_NAME,
             python_model=VolatilityPyfunc(result.model.estimator),
             input_example=sample,
             tags=dataset.identity.tags(),
         )
-        return run.info.run_id
+        return run.info.run_id, info
+
+
+def holdout_frame(dataset: VolatilityTrainingDataset) -> pd.DataFrame:
+    """Lignes du test final (mêmes règles d'embargo que l'entraînement)."""
+    _, holdout_index = holdout_split(
+        dataset.frame, horizon=timedelta(hours=dataset.hours), target_column=TARGET_COLUMN
+    )
+    return dataset.frame.iloc[holdout_index]
+
+
+def champion_score(connector, holdout: pd.DataFrame) -> float | None:
+    """QLIKE du champion actuel rescoré sur le test final du candidat (None sans champion)."""
+    from registry import CHAMPION
+
+    if connector.get_version(MODEL_NAME, CHAMPION) is None:
+        return None
+    champion = connector.load_model(MODEL_NAME, CHAMPION)
+    predicted = np.asarray(champion.predict(holdout.loc[:, list(FEATURE_COLUMNS)]), dtype='float64')
+    return qlike(predicted, holdout[TARGET_COLUMN].to_numpy(dtype='float64'))
+
+
+def promote(result: TrainingResult, connector, info, *, record=None, allow_unreleased: bool = False):
+    """Applique la règle de promotion (niveaux 1 et 2, comparaison au champion) et publie."""
+    from registry import decide, publish
+
+    decision = decide(
+        level1=result.beats_baselines(),
+        level2=result.beats_persistence_strategy(),
+        score=result.holdout[result.candidate]['qlike'],
+        champion_score=champion_score(connector, holdout_frame(result.dataset)),
+    )
+    version = publish(connector, info, MODEL_NAME, decision, record=record, allow_unreleased=allow_unreleased)
+    return decision, version
 
 
 def load_candles(env: Mapping[str, str] | None = None) -> pd.DataFrame:
@@ -226,17 +400,41 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         '--as-of', type=datetime.fromisoformat, default=None, help='instant de référence (UTC)'
     )
+    parser.add_argument(
+        '--registre', action='store_true', help='enregistre le modèle et applique la règle de promotion'
+    )
+    parser.add_argument(
+        '--non-publie',
+        action='store_true',
+        help="autorise l'enregistrement de code non publié (essais uniquement)",
+    )
     args = parser.parse_args(argv)
 
     dataset = prepare_volatility_dataset(load_candles(), hours=HORIZON_HOURS, as_of=args.as_of)
     result = fit_volatility_model(dataset)
     connector = MlflowConnector(MlflowConfig.from_env())
-    run_id = log_training(result, connector)
+    run_id, info = log_training(result, connector)
     print(f'candidat : {result.candidate}')
     for predictor, metrics in result.holdout.items():
         print(f'  {predictor:<12} QLIKE {metrics["qlike"]:.4f}  MAE log-vol {metrics["mae_log_vol"]:.4f}')
     print(f'bat les références : {result.beats_baselines()}')
+    for strategy, metrics in result.strategy.items():
+        print(
+            f'  stratégie {strategy:<12} Sharpe {metrics["sharpe"]:.2f}'
+            f'  perte max {metrics["max_drawdown"]:.2%}'
+        )
     print(connector.run_url(run_id))
+    if args.registre:
+        from connectors.config import PostgresConfig
+        from connectors.postgres import PostgresConnector
+
+        with PostgresConnector(PostgresConfig.from_env()) as db:
+            decision, version = promote(
+                result, connector, info, record=db.record_model_event, allow_unreleased=args.non_publie
+            )
+        print(f'registre : {decision.summary()}')
+        if version is not None:
+            print(f'  {MODEL_NAME} version {version.version} -> {decision.alias}')
     return 0
 
 
