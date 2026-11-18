@@ -9,6 +9,30 @@ x-healthcheck: &healthcheck-defaults
   retries: 10
   start_period: 60s
 
+# Image du projet (Dockerfile) : mêmes variables que .env, adresses internes au réseau compose.
+x-app: &app
+  build: .
+  image: 5mlde-project/app:latest
+  restart: unless-stopped
+  environment: &app-env
+    MLFLOW_TRACKING_URI: http://mlflow:5000
+    MLFLOW_EXPERIMENT_NAME: "${MLFLOW_EXPERIMENT_NAME:-5mlde-project}"
+    PREFECT_API_URL: http://prefect:4200/api
+    GRAFANA_URL: http://grafana:3000
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+    API_DB_PASSWORD: "${API_DB_PASSWORD:-5mlde-project-api}"
+    MLFLOW_DISABLE_AGENT_HINT: "1"
+    # Pas de Git dans l'image : la provenance passe par les tags code.* (src/lineage).
+    GIT_PYTHON_REFRESH: quiet
+  depends_on: &app-depends
+    postgres:
+      condition: service_healthy
+    mlflow:
+      condition: service_healthy
+    prefect:
+      condition: service_healthy
+
 services:
   postgres:
     image: postgres:18.6-bookworm
@@ -132,6 +156,41 @@ services:
       <<: *healthcheck-defaults
       start_period: 30s
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
+
+  worker:
+    <<: *app
+    # Sert les déploiements planifiés (src/flows/serve.py) : ingestion, prévision, retours, entraînement.
+    command: ["python", "-m", "flows.serve"]
+    environment:
+      <<: *app-env
+      # Historique Parquet partagé avec l'hôte (même dossier que `uv run python -m flows.ingest`).
+      DATA_DIR: /data
+      CANDLES_RETENTION_DAYS: "${CANDLES_RETENTION_DAYS:-45}"
+    volumes:
+      - ./data:/data
+    healthcheck:
+      <<: *healthcheck-defaults
+      # Le worker est sain s'il joint l'API Prefect.
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://prefect:4200/api/health', timeout=5)"
+
+  api:
+    <<: *app
+    command: ["uvicorn", "api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    healthcheck:
+      <<: *healthcheck-defaults
+      start_period: 20s
+      # /health renvoie 503 si une dépendance manque : le conteneur est alors marqué « unhealthy ».
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"
 
 volumes:
   postgres_data:

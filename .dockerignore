@@ -1,0 +1,10 @@
+# Contexte de build de l'image du projet (Dockerfile) : l'arbre suivi par Git au complet,
+# .git compris, pour que hatch-vcs calcule la version exacte (tag, commit, modifications).
+# Seuls les fichiers ignorés par Git sont exclus ; en exclure un suivi rendrait la version « modifiée ».
+.env
+.idea/
+.venv/
+data/
+**/__pycache__/
+.pytest_cache/
+.ruff_cache/

@@ -31,6 +31,7 @@ DISTRIBUTION = '5MLDE-project'
 # Paquets importables du projet, copiés dans chaque modèle (tenu aligné sur
 # [tool.hatch.build.targets.wheel].packages par tests/test_provenance.py).
 PACKAGES = (
+    'api',
     'connectors',
     'features',
     'flows',
@@ -38,6 +39,7 @@ PACKAGES = (
     'lineage',
     'marketdata',
     'registry',
+    'serving',
     'strategies',
     'training',
 )

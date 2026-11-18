@@ -11,6 +11,9 @@ Règles de décision (`decide`) pour une nouvelle version :
 3. le champion actuel, rescoré sur le même test final, fait aussi bien ou mieux -> `challenger` ;
 4. sinon -> `champion`, l'ancien champion devient `precedent`.
 
+Une version enregistrée peut aussi être promue à la main (`promote`), avec une raison
+obligatoire : la règle automatique est contournée mais la décision reste tracée.
+
 Chaque enregistrement, promotion et retrait est tracé dans `tracing.model_events`.
 """
 
@@ -101,6 +104,47 @@ def publish(
     connector.set_alias(name, decision.alias, version.version)
     _record(record, name, version.version, 'promoted', alias=decision.alias, run_id=run_id)
     return version
+
+
+def promote(connector, name: str, version: int | str, *, reason: str, record: EventRecorder | None = None):
+    """Promotion manuelle d'une version enregistrée en `champion` ; renvoie la version promue.
+
+    L'ancien champion devient `precedent` ; si la version promue était `challenger`, l'alias est retiré.
+    """
+    if not reason.strip():
+        raise RegistryError('promotion manuelle : une raison est obligatoire')
+    try:
+        target = connector.client.get_model_version(name, str(version))
+    except Exception as exc:
+        raise RegistryError(f'{name} : version {version} introuvable') from exc
+    current = connector.get_version(name, CHAMPION)
+    if current is not None and str(current.version) == str(target.version):
+        raise RegistryError(f'{name} : la version {target.version} est déjà {CHAMPION!r}')
+    challenger = connector.get_version(name, CHALLENGER)
+    if current is not None:
+        connector.set_alias(name, PREVIOUS, current.version)
+        _record(
+            record,
+            name,
+            current.version,
+            'retired',
+            alias=CHAMPION,
+            run_id=current.run_id,
+            details={'manuel': True},
+        )
+    connector.set_alias(name, CHAMPION, target.version)
+    if challenger is not None and str(challenger.version) == str(target.version):
+        connector.client.delete_registered_model_alias(name, CHALLENGER)
+    _record(
+        record,
+        name,
+        target.version,
+        'promoted',
+        alias=CHAMPION,
+        run_id=target.run_id,
+        details={'manuel': True, 'raison': reason.strip()},
+    )
+    return target
 
 
 def rollback(connector, name: str, *, record: EventRecorder | None = None):

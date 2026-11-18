@@ -22,6 +22,8 @@ docker compose down           # arrêt (ajouter -v pour repartir de volumes vide
 | Prefect 3.8.7 | http://localhost:4200 | Orchestration des flows (backend PostgreSQL, base `prefect`) |
 | PostgreSQL 18.6 | `localhost:5432` | Bases `mlops` (schéma `tracing`), `prefect`, `mlflow` |
 | Grafana 13.2.3 | http://localhost:3000 | Supervision (admin / `5mlde-project-admin` par défaut) |
+| API du projet | http://localhost:8000/docs | FastAPI : santé, prévisions, registre, marche/arrêt (image du projet) |
+| Worker | — | Sert les déploiements Prefect planifiés (image du projet) |
 
 Tous les ports sont liés à `127.0.0.1` uniquement et se changent dans `.env`.
 Les mots de passe PostgreSQL ne sont appliqués qu'à la création du volume `postgres_data`.
@@ -119,6 +121,35 @@ l'identité des données et le rapport qualité.
 Les deux fonctions appliquent un embargo au moins égal à l'horizon et excluent les lignes sans cible
 si `target_column` est fourni. `training.metrics.information_coefficient` calcule l'IC de Spearman
 transversal par horodatage ; `training.metrics.icir` calcule l'ICIR d'une série d'IC.
+
+## Service en production
+
+`worker` et `api` tournent sur l'image du projet (`Dockerfile`) : le paquet y est installé en copie
+non éditable avec les dépendances de `uv.lock`, et sa version est calculée depuis Git au build.
+Seule une image construite sur un tag propre (`git tag v0.1.0` puis `docker compose build worker api`)
+peut enregistrer des modèles au registre ; sinon l'entraînement est loggé dans MLflow mais non publié.
+
+| Déploiement Prefect | Planning (UTC) | Rôle |
+|---|---|---|
+| `ingest-candles/horaire` | `2 * * * *` | Bougies de l'heure écoulée (API REST), archives mensuelles manquantes |
+| `predict-volatility/horaire-prevision` | `7 * * * *` | Prévision 24 h du `champion` (et du `challenger`), tracée dans `tracing.predictions` |
+| `feedback-volatility/horaire-retours` | `20 * * * *` | Retours à horizon clôturé, santé quotidienne, retour arrière automatique |
+| `train-volatility/hebdomadaire` | `30 3 * * 1` | Réentraînement et règle de promotion (niveaux 1 et 2) |
+
+Un déploiement se lance aussi à la main (« Quick run » dans l'UI Prefect, ou
+`docker compose exec worker prefect deployment run predict-volatility/horaire-prevision`).
+Les mêmes flows tournent hors conteneur : `uv run python -m flows.predict`, `flows.feedback`, `flows.train`.
+
+Registre et service en ligne de commande :
+
+```powershell
+uv run python -m registry statut volatilite
+uv run python -m registry promouvoir volatilite --version 2 --raison "..."   # promotion manuelle tracée
+uv run python -m registry retour-arriere volatilite
+```
+
+`POST /system/state` (ou l'interrupteur de l'application) arrête les flows planifiés : ils se
+terminent en `cancelled` dans `tracing.pipeline_runs`, sans rien écrire, jusqu'à la remise en marche.
 
 ## Tests
 

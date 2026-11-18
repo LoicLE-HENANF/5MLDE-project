@@ -20,6 +20,8 @@ dependencies = [
   "psutil>=7.0",
   # Graphiques joints aux runs MLflow (training.figures).
   "matplotlib>=3.10",
+  # Serveur de l'API (src/api).
+  "uvicorn>=0.34",
 ]
 
 [dependency-groups]
@@ -39,6 +41,7 @@ source = "vcs"
 
 [tool.hatch.build.targets.wheel]
 packages = [
+  "src/api",
   "src/connectors",
   "src/features",
   "src/flows",
@@ -46,6 +49,7 @@ packages = [
   "src/lineage",
   "src/marketdata",
   "src/registry",
+  "src/serving",
   "src/strategies",
   "src/training",
 ]
@@ -71,4 +75,4 @@ select = ["E", "W", "F", "I", "B", "UP", "BLE", "SIM", "RUF"]
 quote-style = "single"
 
 [tool.ruff.lint.isort]
-known-first-party = ["connectors", "features", "flows", "ingestion", "lineage", "marketdata", "registry", "strategies", "training"]
+known-first-party = ["api", "connectors", "features", "flows", "ingestion", "lineage", "marketdata", "registry", "serving", "strategies", "training"]
