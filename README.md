@@ -198,6 +198,55 @@ Les schémas sont rendus dans le navigateur par viz.js, copié dans `src/app/sta
 Streamlit : aucune connexion internet n'est nécessaire.
 Grafana reste en lecture seule : l'interrupteur vit ici, Grafana n'affiche que les bascules.
 
+## Dimensionnement (test de charge)
+
+`loadtest/` mesure ce que l'API tient et recommande la plus petite configuration suffisante.
+Locust est dans un groupe de dépendances à part (`load`), absent de l'image.
+
+```powershell
+uv run --group load python -m loadtest                  # campagne complète (~45 min), redémarre l'API
+uv run --group load python -m loadtest --configs 2x1    # une configuration (processus x cœurs)
+```
+
+**Profils d'utilisateurs** (cible) : 200 bots de trading qui relisent `GET /predictions/latest` toutes les 1 à 3 s
+et arrivent en rafale au début de chaque heure ; 20 analystes (prévisions, fiche modèle, état) ; 2 opérateurs
+(`/health`, `/system/state`).
+
+**Protocole** : pour chaque configuration de l'API (1, 2 ou 4 processus uvicorn × 0,5 ou 1 cœur, via
+`API_WORKERS` / `API_CPUS`), trois scénarios : régime normal (42 utilisateurs, 60 s), pic de début d'heure
+(222 utilisateurs arrivés en 10 s, montée comprise dans la mesure), rampe de 100 en 100 bots (20 s par palier)
+jusqu'au premier palier hors SLO. CPU et mémoire de `api` et `postgres` relevés par `docker stats`.
+**SLO** : p95 < 200 ms et moins de 1 % d'erreurs. **Règle** : plus petite configuration (CPU puis processus) qui
+tient le pic et le double de la cible (400 bots) sur la rampe. Résultats dans `tracing.load_tests`, le dashboard
+Grafana « Charge » et `loadtest/results/<campagne>.json`.
+
+**Résultats** (campagne `2026-11-18T2120Z`, toutes erreurs < 0,02 %) :
+
+| Configuration | p95 au pic | Bots tenus (rampe) | Débit à ce palier | CPU api | Mémoire api |
+|---|---|---|---|---|---|
+| 1 processus, 0,5 cœur | 71 ms | 200 | 105 req/s | 23 % | 166 Mio |
+| 2 processus, 0,5 cœur | 54 ms | 200 | 106 req/s | 24 % | 323 Mio |
+| 4 processus, 0,5 cœur | 49 ms | 200 | 106 req/s | 24 % | 573 Mio |
+| **1 processus, 1 cœur** | **36 ms** | **500** | **255 req/s** | 51 % | 178 Mio |
+| 2 processus, 1 cœur | 23 ms | 600 | 304 req/s | 59 % | 345 Mio |
+| 4 processus, 1 cœur | 22 ms | 600 | 303 req/s | 59 % | 599 Mio |
+
+**Recommandation : 1 processus uvicorn, 1 cœur, ~200 Mio de mémoire** (configuration par défaut de `.env.example`).
+Elle tient le pic avec un p95 de 36 ms et 500 bots avant rupture, soit 2,5 fois la cible. Avec 0,5 cœur, toutes
+les configurations cassent dès 300 bots : la marge de 2× n'est pas tenue. Passer à 2 processus n'apporte que
++100 bots pour deux fois plus de mémoire, et 4 processus rien de plus. PostgreSQL reste sous 10 % de CPU : la base
+n'est pas le goulot.
+
+**Limites** :
+- client et serveur sur le même PC : Locust (un seul processus) partage les cœurs avec la stack ;
+- au point de rupture, le CPU de l'API reste vers 50-60 % et le plafond (~300 req/s) est le même pour 2 et
+  4 processus : la limite vient probablement du client Locust ou du pool de connexions PostgreSQL
+  (`API_DB_POOL_MAX=5` par processus), pas du calcul de l'API ;
+- `/health` et `/models/{nom}` interrogent MLflow (p95 ~400 ms et ~150 ms en régime normal), d'où un p95 global
+  de 110 ms sous faible charge : ces routes de supervision sont rares, le SLO vise surtout `/predictions/latest`
+  (p95 7 ms) ;
+- mesures de 20 à 60 s par palier, une seule campagne.
+
 ## Tests
 
 ```powershell

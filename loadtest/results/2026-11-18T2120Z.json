@@ -1,0 +1,1282 @@
+{
+  "campaign": "2026-11-18T2120Z",
+  "slo": {
+    "p95_ms": 200.0,
+    "max_error_rate": 0.01
+  },
+  "recommendation": "plus petite configuration qui tient le pic (200 bots) et 500 bots sur la rampe (≥ 400, marge 2×)",
+  "rows": [
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "normal",
+      "workers": 1,
+      "cpus": 0.5,
+      "users": 42,
+      "duration_s": 60.0,
+      "requests": 941,
+      "failures": 0,
+      "p50_ms": 4.0,
+      "p95_ms": 110.0,
+      "p99_ms": 150.0,
+      "max_ms": 404.4606000024942,
+      "api_cpu_pct": 5.5871875,
+      "api_mem_mb": 149.0,
+      "pg_cpu_pct": 1.70546875,
+      "pg_mem_mb": 144.5,
+      "slo_ok": true,
+      "details": {
+        "bots": 20,
+        "endpoints": {
+          "/health": {
+            "requests": 7,
+            "failures": 0,
+            "p50_ms": 280.0,
+            "p95_ms": 400.0,
+            "p99_ms": 400.0
+          },
+          "/models/[name]": {
+            "requests": 60,
+            "failures": 0,
+            "p50_ms": 110.0,
+            "p95_ms": 150.0,
+            "p99_ms": 170.0
+          },
+          "/predictions/latest": {
+            "requests": 791,
+            "failures": 0,
+            "p50_ms": 4.0,
+            "p95_ms": 7.0,
+            "p99_ms": 25.0
+          },
+          "/system/state": {
+            "requests": 83,
+            "failures": 0,
+            "p50_ms": 4.0,
+            "p95_ms": 7.0,
+            "p99_ms": 11.0
+          }
+        },
+        "api_cpu_max_pct": 28.2,
+        "spawn_s": 4.0,
+        "client_cpu_warning": false,
+        "errors": []
+      },
+      "recommended": false
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "pic",
+      "workers": 1,
+      "cpus": 0.5,
+      "users": 222,
+      "duration_s": 60.01499999999942,
+      "requests": 5904,
+      "failures": 0,
+      "p50_ms": 5.0,
+      "p95_ms": 71.0,
+      "p99_ms": 170.0,
+      "max_ms": 459.65789999900153,
+      "api_cpu_pct": 20.744957983193277,
+      "api_mem_mb": 160.7,
+      "pg_cpu_pct": 3.7167226890756306,
+      "pg_mem_mb": 144.5,
+      "slo_ok": true,
+      "details": {
+        "bots": 200,
+        "endpoints": {
+          "/health": {
+            "requests": 12,
+            "failures": 0,
+            "p50_ms": 310.0,
+            "p95_ms": 370.0,
+            "p99_ms": 370.0
+          },
+          "/models/[name]": {
+            "requests": 71,
+            "failures": 0,
+            "p50_ms": 110.0,
+            "p95_ms": 160.0,
+            "p99_ms": 460.0
+          },
+          "/predictions/latest": {
+            "requests": 5749,
+            "failures": 0,
+            "p50_ms": 5.0,
+            "p95_ms": 57.0,
+            "p99_ms": 150.0
+          },
+          "/system/state": {
+            "requests": 72,
+            "failures": 0,
+            "p50_ms": 6.0,
+            "p95_ms": 200.0,
+            "p99_ms": 260.0
+          }
+        },
+        "api_cpu_max_pct": 48.28,
+        "spawn_s": 0.0,
+        "client_cpu_warning": false,
+        "errors": []
+      },
+      "recommended": false
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "rupture",
+      "workers": 1,
+      "cpus": 0.5,
+      "users": 200,
+      "duration_s": 20.0,
+      "requests": 2093,
+      "failures": 0,
+      "p50_ms": 5.0,
+      "p95_ms": 110.0,
+      "p99_ms": 250.0,
+      "max_ms": 991.8005999934394,
+      "api_cpu_pct": 22.65046511627907,
+      "api_mem_mb": 166.0,
+      "pg_cpu_pct": 3.957441860465116,
+      "pg_mem_mb": 143.8,
+      "slo_ok": true,
+      "details": {
+        "bots": 200,
+        "endpoints": {
+          "/health": {
+            "requests": 5,
+            "failures": 0,
+            "p50_ms": 300.0,
+            "p95_ms": 990.0,
+            "p99_ms": 990.0
+          },
+          "/models/[name]": {
+            "requests": 23,
+            "failures": 0,
+            "p50_ms": 120.0,
+            "p95_ms": 300.0,
+            "p99_ms": 370.0
+          },
+          "/predictions/latest": {
+            "requests": 2044,
+            "failures": 0,
+            "p50_ms": 5.0,
+            "p95_ms": 100.0,
+            "p99_ms": 240.0
+          },
+          "/system/state": {
+            "requests": 21,
+            "failures": 0,
+            "p50_ms": 6.0,
+            "p95_ms": 74.0,
+            "p99_ms": 130.0
+          }
+        },
+        "api_cpu_max_pct": 45.6,
+        "spawn_s": 2.0,
+        "client_cpu_warning": false,
+        "errors": [],
+        "ramp": [
+          {
+            "bots": 100,
+            "rps": 54.35,
+            "p95_ms": 36.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 13.634146341463415
+          },
+          {
+            "bots": 200,
+            "rps": 104.65,
+            "p95_ms": 110.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 22.65046511627907
+          },
+          {
+            "bots": 300,
+            "rps": 149.65,
+            "p95_ms": 620.0,
+            "error_rate": 0.0,
+            "slo_ok": false,
+            "api_cpu_pct": 33.32909090909091
+          }
+        ]
+      },
+      "recommended": false
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "normal",
+      "workers": 2,
+      "cpus": 0.5,
+      "users": 42,
+      "duration_s": 60.0,
+      "requests": 958,
+      "failures": 0,
+      "p50_ms": 4.0,
+      "p95_ms": 110.0,
+      "p99_ms": 280.0,
+      "max_ms": 355.0304000018514,
+      "api_cpu_pct": 7.363125,
+      "api_mem_mb": 307.2,
+      "pg_cpu_pct": 4.001875,
+      "pg_mem_mb": 155.3,
+      "slo_ok": true,
+      "details": {
+        "bots": 20,
+        "endpoints": {
+          "/health": {
+            "requests": 11,
+            "failures": 0,
+            "p50_ms": 300.0,
+            "p95_ms": 360.0,
+            "p99_ms": 360.0
+          },
+          "/models/[name]": {
+            "requests": 65,
+            "failures": 0,
+            "p50_ms": 110.0,
+            "p95_ms": 160.0,
+            "p99_ms": 170.0
+          },
+          "/predictions/latest": {
+            "requests": 807,
+            "failures": 0,
+            "p50_ms": 4.0,
+            "p95_ms": 6.0,
+            "p99_ms": 23.0
+          },
+          "/system/state": {
+            "requests": 75,
+            "failures": 0,
+            "p50_ms": 5.0,
+            "p95_ms": 7.0,
+            "p99_ms": 12.0
+          }
+        },
+        "api_cpu_max_pct": 30.37,
+        "spawn_s": 4.0,
+        "client_cpu_warning": false,
+        "errors": []
+      },
+      "recommended": false
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "pic",
+      "workers": 2,
+      "cpus": 0.5,
+      "users": 222,
+      "duration_s": 60.0,
+      "requests": 5932,
+      "failures": 0,
+      "p50_ms": 4.0,
+      "p95_ms": 54.0,
+      "p99_ms": 110.0,
+      "max_ms": 612.8581000011764,
+      "api_cpu_pct": 22.334033613445378,
+      "api_mem_mb": 316.4,
+      "pg_cpu_pct": 4.777310924369748,
+      "pg_mem_mb": 151.4,
+      "slo_ok": true,
+      "details": {
+        "bots": 200,
+        "endpoints": {
+          "/health": {
+            "requests": 12,
+            "failures": 0,
+            "p50_ms": 290.0,
+            "p95_ms": 610.0,
+            "p99_ms": 610.0
+          },
+          "/models/[name]": {
+            "requests": 74,
+            "failures": 0,
+            "p50_ms": 110.0,
+            "p95_ms": 160.0,
+            "p99_ms": 300.0
+          },
+          "/predictions/latest": {
+            "requests": 5788,
+            "failures": 0,
+            "p50_ms": 4.0,
+            "p95_ms": 43.0,
+            "p99_ms": 85.0
+          },
+          "/system/state": {
+            "requests": 58,
+            "failures": 0,
+            "p50_ms": 5.0,
+            "p95_ms": 54.0,
+            "p99_ms": 72.0
+          }
+        },
+        "api_cpu_max_pct": 50.82,
+        "spawn_s": 0.0,
+        "client_cpu_warning": false,
+        "errors": []
+      },
+      "recommended": false
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "rupture",
+      "workers": 2,
+      "cpus": 0.5,
+      "users": 200,
+      "duration_s": 20.0,
+      "requests": 2127,
+      "failures": 0,
+      "p50_ms": 4.0,
+      "p95_ms": 31.0,
+      "p99_ms": 120.0,
+      "max_ms": 290.4000999988057,
+      "api_cpu_pct": 24.336190476190477,
+      "api_mem_mb": 323.4,
+      "pg_cpu_pct": 4.186190476190476,
+      "pg_mem_mb": 154.2,
+      "slo_ok": true,
+      "details": {
+        "bots": 200,
+        "endpoints": {
+          "/health": {
+            "requests": 1,
+            "failures": 0,
+            "p50_ms": 290.0,
+            "p95_ms": 290.0,
+            "p99_ms": 290.0
+          },
+          "/models/[name]": {
+            "requests": 20,
+            "failures": 0,
+            "p50_ms": 120.0,
+            "p95_ms": 260.0,
+            "p99_ms": 260.0
+          },
+          "/predictions/latest": {
+            "requests": 2069,
+            "failures": 0,
+            "p50_ms": 4.0,
+            "p95_ms": 17.0,
+            "p99_ms": 99.0
+          },
+          "/system/state": {
+            "requests": 37,
+            "failures": 0,
+            "p50_ms": 6.0,
+            "p95_ms": 77.0,
+            "p99_ms": 100.0
+          }
+        },
+        "api_cpu_max_pct": 47.28,
+        "spawn_s": 2.0,
+        "client_cpu_warning": false,
+        "errors": [],
+        "ramp": [
+          {
+            "bots": 100,
+            "rps": 54.65627498000708,
+            "p95_ms": 33.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 15.6865
+          },
+          {
+            "bots": 200,
+            "rps": 106.35,
+            "p95_ms": 31.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 24.336190476190477
+          },
+          {
+            "bots": 300,
+            "rps": 149.55,
+            "p95_ms": 700.0,
+            "error_rate": 0.0,
+            "slo_ok": false,
+            "api_cpu_pct": 33.949090909090906
+          }
+        ]
+      },
+      "recommended": false
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "normal",
+      "workers": 4,
+      "cpus": 0.5,
+      "users": 42,
+      "duration_s": 60.0,
+      "requests": 948,
+      "failures": 0,
+      "p50_ms": 4.0,
+      "p95_ms": 110.0,
+      "p99_ms": 120.0,
+      "max_ms": 286.81089999736287,
+      "api_cpu_pct": 6.146825396825397,
+      "api_mem_mb": 550.8,
+      "pg_cpu_pct": 1.7019047619047618,
+      "pg_mem_mb": 157.7,
+      "slo_ok": true,
+      "details": {
+        "bots": 20,
+        "endpoints": {
+          "/health": {
+            "requests": 4,
+            "failures": 0,
+            "p50_ms": 290.0,
+            "p95_ms": 290.0,
+            "p99_ms": 290.0
+          },
+          "/models/[name]": {
+            "requests": 55,
+            "failures": 0,
+            "p50_ms": 110.0,
+            "p95_ms": 130.0,
+            "p99_ms": 220.0
+          },
+          "/predictions/latest": {
+            "requests": 806,
+            "failures": 0,
+            "p50_ms": 4.0,
+            "p95_ms": 7.0,
+            "p99_ms": 23.0
+          },
+          "/system/state": {
+            "requests": 83,
+            "failures": 0,
+            "p50_ms": 4.0,
+            "p95_ms": 8.0,
+            "p99_ms": 34.0
+          }
+        },
+        "api_cpu_max_pct": 27.86,
+        "spawn_s": 4.0,
+        "client_cpu_warning": false,
+        "errors": []
+      },
+      "recommended": false
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "pic",
+      "workers": 4,
+      "cpus": 0.5,
+      "users": 222,
+      "duration_s": 60.01499999999942,
+      "requests": 5952,
+      "failures": 1,
+      "p50_ms": 4.0,
+      "p95_ms": 49.0,
+      "p99_ms": 120.0,
+      "max_ms": 426.1129999940749,
+      "api_cpu_pct": 21.93873949579832,
+      "api_mem_mb": 563.5,
+      "pg_cpu_pct": 4.039495798319328,
+      "pg_mem_mb": 181.1,
+      "slo_ok": true,
+      "details": {
+        "bots": 200,
+        "endpoints": {
+          "/health": {
+            "requests": 9,
+            "failures": 0,
+            "p50_ms": 280.0,
+            "p95_ms": 310.0,
+            "p99_ms": 310.0
+          },
+          "/models/[name]": {
+            "requests": 63,
+            "failures": 0,
+            "p50_ms": 110.0,
+            "p95_ms": 160.0,
+            "p99_ms": 430.0
+          },
+          "/predictions/latest": {
+            "requests": 5810,
+            "failures": 1,
+            "p50_ms": 4.0,
+            "p95_ms": 36.0,
+            "p99_ms": 100.0
+          },
+          "/system/state": {
+            "requests": 70,
+            "failures": 0,
+            "p50_ms": 5.0,
+            "p95_ms": 97.0,
+            "p99_ms": 190.0
+          }
+        },
+        "api_cpu_max_pct": 51.56,
+        "spawn_s": 0.0,
+        "client_cpu_warning": false,
+        "errors": [
+          "Remote end closed connection without response"
+        ]
+      },
+      "recommended": false
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "rupture",
+      "workers": 4,
+      "cpus": 0.5,
+      "users": 200,
+      "duration_s": 20.0,
+      "requests": 2127,
+      "failures": 0,
+      "p50_ms": 4.0,
+      "p95_ms": 18.0,
+      "p99_ms": 110.0,
+      "max_ms": 296.0492999991402,
+      "api_cpu_pct": 23.562380952380952,
+      "api_mem_mb": 573.0,
+      "pg_cpu_pct": 4.114761904761904,
+      "pg_mem_mb": 182.0,
+      "slo_ok": true,
+      "details": {
+        "bots": 200,
+        "endpoints": {
+          "/health": {
+            "requests": 4,
+            "failures": 0,
+            "p50_ms": 290.0,
+            "p95_ms": 300.0,
+            "p99_ms": 300.0
+          },
+          "/models/[name]": {
+            "requests": 29,
+            "failures": 0,
+            "p50_ms": 110.0,
+            "p95_ms": 150.0,
+            "p99_ms": 160.0
+          },
+          "/predictions/latest": {
+            "requests": 2072,
+            "failures": 0,
+            "p50_ms": 4.0,
+            "p95_ms": 8.0,
+            "p99_ms": 61.0
+          },
+          "/system/state": {
+            "requests": 22,
+            "failures": 0,
+            "p50_ms": 5.0,
+            "p95_ms": 10.0,
+            "p99_ms": 66.0
+          }
+        },
+        "api_cpu_max_pct": 47.62,
+        "spawn_s": 2.0,
+        "client_cpu_warning": false,
+        "errors": [],
+        "ramp": [
+          {
+            "bots": 100,
+            "rps": 55.35,
+            "p95_ms": 29.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 14.011
+          },
+          {
+            "bots": 200,
+            "rps": 106.35,
+            "p95_ms": 18.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 23.562380952380952
+          },
+          {
+            "bots": 300,
+            "rps": 151.1290967225973,
+            "p95_ms": 450.0,
+            "error_rate": 0.0,
+            "slo_ok": false,
+            "api_cpu_pct": 32.64272727272727
+          }
+        ]
+      },
+      "recommended": false
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "normal",
+      "workers": 1,
+      "cpus": 1.0,
+      "users": 42,
+      "duration_s": 60.01499999999942,
+      "requests": 943,
+      "failures": 0,
+      "p50_ms": 4.0,
+      "p95_ms": 110.0,
+      "p99_ms": 150.0,
+      "max_ms": 317.1156000025803,
+      "api_cpu_pct": 5.670787401574803,
+      "api_mem_mb": 146.9,
+      "pg_cpu_pct": 1.6959055118110236,
+      "pg_mem_mb": 153.2,
+      "slo_ok": true,
+      "details": {
+        "bots": 20,
+        "endpoints": {
+          "/health": {
+            "requests": 9,
+            "failures": 0,
+            "p50_ms": 280.0,
+            "p95_ms": 320.0,
+            "p99_ms": 320.0
+          },
+          "/models/[name]": {
+            "requests": 74,
+            "failures": 0,
+            "p50_ms": 110.0,
+            "p95_ms": 130.0,
+            "p99_ms": 150.0
+          },
+          "/predictions/latest": {
+            "requests": 786,
+            "failures": 0,
+            "p50_ms": 4.0,
+            "p95_ms": 6.0,
+            "p99_ms": 10.0
+          },
+          "/system/state": {
+            "requests": 74,
+            "failures": 0,
+            "p50_ms": 5.0,
+            "p95_ms": 7.0,
+            "p99_ms": 10.0
+          }
+        },
+        "api_cpu_max_pct": 28.55,
+        "spawn_s": 4.0,
+        "client_cpu_warning": false,
+        "errors": []
+      },
+      "recommended": true
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "pic",
+      "workers": 1,
+      "cpus": 1.0,
+      "users": 222,
+      "duration_s": 60.0,
+      "requests": 5980,
+      "failures": 0,
+      "p50_ms": 4.0,
+      "p95_ms": 36.0,
+      "p99_ms": 110.0,
+      "max_ms": 327.2179000050528,
+      "api_cpu_pct": 20.137563025210085,
+      "api_mem_mb": 155.8,
+      "pg_cpu_pct": 3.568571428571429,
+      "pg_mem_mb": 153.4,
+      "slo_ok": true,
+      "details": {
+        "bots": 200,
+        "endpoints": {
+          "/health": {
+            "requests": 10,
+            "failures": 0,
+            "p50_ms": 290.0,
+            "p95_ms": 330.0,
+            "p99_ms": 330.0
+          },
+          "/models/[name]": {
+            "requests": 70,
+            "failures": 0,
+            "p50_ms": 120.0,
+            "p95_ms": 190.0,
+            "p99_ms": 200.0
+          },
+          "/predictions/latest": {
+            "requests": 5832,
+            "failures": 0,
+            "p50_ms": 4.0,
+            "p95_ms": 16.0,
+            "p99_ms": 64.0
+          },
+          "/system/state": {
+            "requests": 68,
+            "failures": 0,
+            "p50_ms": 5.0,
+            "p95_ms": 44.0,
+            "p99_ms": 83.0
+          }
+        },
+        "api_cpu_max_pct": 46.95,
+        "spawn_s": 0.0,
+        "client_cpu_warning": false,
+        "errors": []
+      },
+      "recommended": true
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "rupture",
+      "workers": 1,
+      "cpus": 1.0,
+      "users": 500,
+      "duration_s": 20.0,
+      "requests": 5095,
+      "failures": 0,
+      "p50_ms": 7.0,
+      "p95_ms": 26.0,
+      "p99_ms": 64.0,
+      "max_ms": 299.2147999975714,
+      "api_cpu_pct": 50.778333333333336,
+      "api_mem_mb": 177.9,
+      "pg_cpu_pct": 6.647916666666667,
+      "pg_mem_mb": 146.7,
+      "slo_ok": true,
+      "details": {
+        "bots": 500,
+        "endpoints": {
+          "/health": {
+            "requests": 2,
+            "failures": 0,
+            "p50_ms": 300.0,
+            "p95_ms": 300.0,
+            "p99_ms": 300.0
+          },
+          "/models/[name]": {
+            "requests": 22,
+            "failures": 0,
+            "p50_ms": 120.0,
+            "p95_ms": 170.0,
+            "p99_ms": 200.0
+          },
+          "/predictions/latest": {
+            "requests": 5043,
+            "failures": 0,
+            "p50_ms": 7.0,
+            "p95_ms": 24.0,
+            "p99_ms": 51.0
+          },
+          "/system/state": {
+            "requests": 28,
+            "failures": 0,
+            "p50_ms": 11.0,
+            "p95_ms": 30.0,
+            "p99_ms": 33.0
+          }
+        },
+        "api_cpu_max_pct": 84.52,
+        "spawn_s": 5.0,
+        "client_cpu_warning": false,
+        "errors": [],
+        "ramp": [
+          {
+            "bots": 100,
+            "rps": 55.40844366725118,
+            "p95_ms": 13.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 11.605
+          },
+          {
+            "bots": 200,
+            "rps": 106.75,
+            "p95_ms": 12.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 21.174761904761905
+          },
+          {
+            "bots": 300,
+            "rps": 157.05,
+            "p95_ms": 18.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 33.10909090909091
+          },
+          {
+            "bots": 400,
+            "rps": 203.05,
+            "p95_ms": 32.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 41.74217391304348
+          },
+          {
+            "bots": 500,
+            "rps": 254.75,
+            "p95_ms": 26.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 50.778333333333336
+          },
+          {
+            "bots": 600,
+            "rps": 294.85,
+            "p95_ms": 340.0,
+            "error_rate": 0.0,
+            "slo_ok": false,
+            "api_cpu_pct": 63.9088
+          }
+        ]
+      },
+      "recommended": true
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "normal",
+      "workers": 2,
+      "cpus": 1.0,
+      "users": 42,
+      "duration_s": 60.0,
+      "requests": 976,
+      "failures": 0,
+      "p50_ms": 4.0,
+      "p95_ms": 110.0,
+      "p99_ms": 160.0,
+      "max_ms": 290.7072999951197,
+      "api_cpu_pct": 6.291269841269842,
+      "api_mem_mb": 306.4,
+      "pg_cpu_pct": 1.8752380952380951,
+      "pg_mem_mb": 149.6,
+      "slo_ok": true,
+      "details": {
+        "bots": 20,
+        "endpoints": {
+          "/health": {
+            "requests": 8,
+            "failures": 0,
+            "p50_ms": 280.0,
+            "p95_ms": 290.0,
+            "p99_ms": 290.0
+          },
+          "/models/[name]": {
+            "requests": 88,
+            "failures": 0,
+            "p50_ms": 110.0,
+            "p95_ms": 150.0,
+            "p99_ms": 160.0
+          },
+          "/predictions/latest": {
+            "requests": 815,
+            "failures": 0,
+            "p50_ms": 4.0,
+            "p95_ms": 6.0,
+            "p99_ms": 8.0
+          },
+          "/system/state": {
+            "requests": 65,
+            "failures": 0,
+            "p50_ms": 4.0,
+            "p95_ms": 6.0,
+            "p99_ms": 9.0
+          }
+        },
+        "api_cpu_max_pct": 31.74,
+        "spawn_s": 4.0,
+        "client_cpu_warning": false,
+        "errors": []
+      },
+      "recommended": false
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "pic",
+      "workers": 2,
+      "cpus": 1.0,
+      "users": 222,
+      "duration_s": 60.0,
+      "requests": 5957,
+      "failures": 0,
+      "p50_ms": 4.0,
+      "p95_ms": 23.0,
+      "p99_ms": 110.0,
+      "max_ms": 357.6941000064835,
+      "api_cpu_pct": 20.290756302521007,
+      "api_mem_mb": 315.5,
+      "pg_cpu_pct": 3.6803361344537815,
+      "pg_mem_mb": 158.4,
+      "slo_ok": true,
+      "details": {
+        "bots": 200,
+        "endpoints": {
+          "/health": {
+            "requests": 10,
+            "failures": 0,
+            "p50_ms": 290.0,
+            "p95_ms": 360.0,
+            "p99_ms": 360.0
+          },
+          "/models/[name]": {
+            "requests": 67,
+            "failures": 0,
+            "p50_ms": 110.0,
+            "p95_ms": 140.0,
+            "p99_ms": 160.0
+          },
+          "/predictions/latest": {
+            "requests": 5811,
+            "failures": 0,
+            "p50_ms": 4.0,
+            "p95_ms": 11.0,
+            "p99_ms": 43.0
+          },
+          "/system/state": {
+            "requests": 69,
+            "failures": 0,
+            "p50_ms": 5.0,
+            "p95_ms": 39.0,
+            "p99_ms": 140.0
+          }
+        },
+        "api_cpu_max_pct": 48.45,
+        "spawn_s": 0.0,
+        "client_cpu_warning": false,
+        "errors": []
+      },
+      "recommended": false
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "rupture",
+      "workers": 2,
+      "cpus": 1.0,
+      "users": 600,
+      "duration_s": 20.0,
+      "requests": 6087,
+      "failures": 0,
+      "p50_ms": 5.0,
+      "p95_ms": 52.0,
+      "p99_ms": 110.0,
+      "max_ms": 684.7430000052555,
+      "api_cpu_pct": 58.635200000000005,
+      "api_mem_mb": 345.0,
+      "pg_cpu_pct": 7.965199999999999,
+      "pg_mem_mb": 157.7,
+      "slo_ok": true,
+      "details": {
+        "bots": 600,
+        "endpoints": {
+          "/health": {
+            "requests": 4,
+            "failures": 0,
+            "p50_ms": 300.0,
+            "p95_ms": 340.0,
+            "p99_ms": 340.0
+          },
+          "/models/[name]": {
+            "requests": 22,
+            "failures": 0,
+            "p50_ms": 120.0,
+            "p95_ms": 550.0,
+            "p99_ms": 680.0
+          },
+          "/predictions/latest": {
+            "requests": 6038,
+            "failures": 0,
+            "p50_ms": 5.0,
+            "p95_ms": 49.0,
+            "p99_ms": 100.0
+          },
+          "/system/state": {
+            "requests": 23,
+            "failures": 0,
+            "p50_ms": 7.0,
+            "p95_ms": 140.0,
+            "p99_ms": 160.0
+          }
+        },
+        "api_cpu_max_pct": 101.34,
+        "spawn_s": 6.1,
+        "client_cpu_warning": false,
+        "errors": [],
+        "ramp": [
+          {
+            "bots": 100,
+            "rps": 55.00599520382797,
+            "p95_ms": 9.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 12.065000000000001
+          },
+          {
+            "bots": 200,
+            "rps": 106.95,
+            "p95_ms": 8.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 21.893809523809523
+          },
+          {
+            "bots": 300,
+            "rps": 156.93230077442374,
+            "p95_ms": 11.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 31.866818181818186
+          },
+          {
+            "bots": 400,
+            "rps": 204.55,
+            "p95_ms": 12.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 38.86739130434783
+          },
+          {
+            "bots": 500,
+            "rps": 255.15,
+            "p95_ms": 14.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 48.9275
+          },
+          {
+            "bots": 600,
+            "rps": 304.35,
+            "p95_ms": 52.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 58.635200000000005
+          },
+          {
+            "bots": 700,
+            "rps": 339.55,
+            "p95_ms": 400.0,
+            "error_rate": 0.0,
+            "slo_ok": false,
+            "api_cpu_pct": 73.77230769230769
+          }
+        ]
+      },
+      "recommended": false
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "normal",
+      "workers": 4,
+      "cpus": 1.0,
+      "users": 42,
+      "duration_s": 60.01499999999942,
+      "requests": 954,
+      "failures": 0,
+      "p50_ms": 4.0,
+      "p95_ms": 110.0,
+      "p99_ms": 150.0,
+      "max_ms": 299.4890000045416,
+      "api_cpu_pct": 6.518110236220472,
+      "api_mem_mb": 554.0,
+      "pg_cpu_pct": 1.7370866141732284,
+      "pg_mem_mb": 156.9,
+      "slo_ok": true,
+      "details": {
+        "bots": 20,
+        "endpoints": {
+          "/health": {
+            "requests": 8,
+            "failures": 0,
+            "p50_ms": 290.0,
+            "p95_ms": 300.0,
+            "p99_ms": 300.0
+          },
+          "/models/[name]": {
+            "requests": 66,
+            "failures": 0,
+            "p50_ms": 110.0,
+            "p95_ms": 120.0,
+            "p99_ms": 150.0
+          },
+          "/predictions/latest": {
+            "requests": 797,
+            "failures": 0,
+            "p50_ms": 4.0,
+            "p95_ms": 6.0,
+            "p99_ms": 9.0
+          },
+          "/system/state": {
+            "requests": 83,
+            "failures": 0,
+            "p50_ms": 5.0,
+            "p95_ms": 7.0,
+            "p99_ms": 9.0
+          }
+        },
+        "api_cpu_max_pct": 30.02,
+        "spawn_s": 4.0,
+        "client_cpu_warning": false,
+        "errors": []
+      },
+      "recommended": false
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "pic",
+      "workers": 4,
+      "cpus": 1.0,
+      "users": 222,
+      "duration_s": 60.0,
+      "requests": 5934,
+      "failures": 0,
+      "p50_ms": 4.0,
+      "p95_ms": 22.0,
+      "p99_ms": 110.0,
+      "max_ms": 307.53359999653185,
+      "api_cpu_pct": 21.832352941176474,
+      "api_mem_mb": 567.6,
+      "pg_cpu_pct": 4.014201680672269,
+      "pg_mem_mb": 178.6,
+      "slo_ok": true,
+      "details": {
+        "bots": 200,
+        "endpoints": {
+          "/health": {
+            "requests": 9,
+            "failures": 0,
+            "p50_ms": 280.0,
+            "p95_ms": 310.0,
+            "p99_ms": 310.0
+          },
+          "/models/[name]": {
+            "requests": 62,
+            "failures": 0,
+            "p50_ms": 110.0,
+            "p95_ms": 150.0,
+            "p99_ms": 170.0
+          },
+          "/predictions/latest": {
+            "requests": 5787,
+            "failures": 0,
+            "p50_ms": 4.0,
+            "p95_ms": 9.0,
+            "p99_ms": 39.0
+          },
+          "/system/state": {
+            "requests": 76,
+            "failures": 0,
+            "p50_ms": 5.0,
+            "p95_ms": 38.0,
+            "p99_ms": 64.0
+          }
+        },
+        "api_cpu_max_pct": 49.06,
+        "spawn_s": 0.0,
+        "client_cpu_warning": false,
+        "errors": []
+      },
+      "recommended": false
+    },
+    {
+      "campaign": "2026-11-18T2120Z",
+      "scenario": "rupture",
+      "workers": 4,
+      "cpus": 1.0,
+      "users": 600,
+      "duration_s": 20.0,
+      "requests": 6063,
+      "failures": 0,
+      "p50_ms": 4.0,
+      "p95_ms": 65.0,
+      "p99_ms": 200.0,
+      "max_ms": 321.0622999977204,
+      "api_cpu_pct": 59.163199999999996,
+      "api_mem_mb": 598.9,
+      "pg_cpu_pct": 8.1652,
+      "pg_mem_mb": 179.3,
+      "slo_ok": true,
+      "details": {
+        "bots": 600,
+        "endpoints": {
+          "/health": {
+            "requests": 2,
+            "failures": 0,
+            "p50_ms": 300.0,
+            "p95_ms": 300.0,
+            "p99_ms": 300.0
+          },
+          "/models/[name]": {
+            "requests": 15,
+            "failures": 0,
+            "p50_ms": 110.0,
+            "p95_ms": 150.0,
+            "p99_ms": 150.0
+          },
+          "/predictions/latest": {
+            "requests": 6019,
+            "failures": 0,
+            "p50_ms": 4.0,
+            "p95_ms": 62.0,
+            "p99_ms": 200.0
+          },
+          "/system/state": {
+            "requests": 27,
+            "failures": 0,
+            "p50_ms": 5.0,
+            "p95_ms": 130.0,
+            "p99_ms": 290.0
+          }
+        },
+        "api_cpu_max_pct": 89.49,
+        "spawn_s": 6.0,
+        "client_cpu_warning": false,
+        "errors": [],
+        "ramp": [
+          {
+            "bots": 100,
+            "rps": 55.6,
+            "p95_ms": 8.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 12.328
+          },
+          {
+            "bots": 200,
+            "rps": 104.66626698639382,
+            "p95_ms": 7.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 22.25
+          },
+          {
+            "bots": 300,
+            "rps": 154.6,
+            "p95_ms": 8.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 32.25818181818182
+          },
+          {
+            "bots": 400,
+            "rps": 204.94629028229426,
+            "p95_ms": 9.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 41.385
+          },
+          {
+            "bots": 500,
+            "rps": 255.15,
+            "p95_ms": 10.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 51.040416666666665
+          },
+          {
+            "bots": 600,
+            "rps": 303.15,
+            "p95_ms": 65.0,
+            "error_rate": 0.0,
+            "slo_ok": true,
+            "api_cpu_pct": 59.163199999999996
+          },
+          {
+            "bots": 700,
+            "rps": 352.0,
+            "p95_ms": 410.0,
+            "error_rate": 0.0,
+            "slo_ok": false,
+            "api_cpu_pct": 69.46851851851852
+          }
+        ]
+      },
+      "recommended": false
+    }
+  ]
+}

@@ -15,6 +15,7 @@ from connectors.errors import ConnectorError
 from connectors.postgres import (
     BATCH_SOURCES,
     BATCH_STATUSES,
+    LOAD_SCENARIOS,
     MODEL_EVENTS,
     PREDICTION_ALIASES,
     PREDICTION_MODES,
@@ -312,6 +313,8 @@ def test_allowed_values_match_init_sql():
     assert all(f"'{v}'" in predictions for v in PREDICTION_ALIASES + PREDICTION_MODES)
     _, health = _sql_columns('model_health')
     assert all(f"'{m}'" in health for m in PREDICTION_MODES)
+    _, load = _sql_columns('load_tests')
+    assert all(f"'{s}'" in load for s in LOAD_SCENARIOS)
 
 
 # -- service : prédictions, retours, santé -----------------------------------------------------
@@ -404,3 +407,43 @@ def test_record_feedback_and_health(config):
             metric='qlike',
             degraded=False,
         )
+
+
+LOAD_TEST = {
+    'campaign': 'c1',
+    'scenario': 'pic',
+    'workers': 2,
+    'cpus': 1.0,
+    'users': 222,
+    'duration_s': 60.0,
+    'requests': 600,
+    'failures': 3,
+    'slo_ok': True,
+}
+
+
+def test_record_load_test_computes_throughput(config):
+    connector, fake = make(config, FakeConnection(rows=[(4,)]))
+    assert connector.record_load_test(**LOAD_TEST, p95_ms=float('nan')) == 4
+    query, params = fake.conn.executed[0]
+    assert 'load_tests' in query.as_string(None)
+    assert 10.0 in params  # 600 requêtes / 60 s
+    assert None in params  # p95 NaN -> NULL
+
+
+@pytest.mark.parametrize(
+    'override',
+    [
+        {'scenario': 'autre'},
+        {'workers': 0},
+        {'cpus': 0},
+        {'duration_s': 0},
+        {'users': -1},
+        {'failures': 601},
+    ],
+)
+def test_record_load_test_validation(config, override):
+    connector, fake = make(config)
+    with pytest.raises(ValueError):
+        connector.record_load_test(**{**LOAD_TEST, **override})
+    assert fake.calls == []

@@ -343,6 +343,19 @@ Le niveau 1 sélectionne, le niveau 2 valide, le niveau 3 confirme. Une version 
   - Grafana reste en lecture seule : il affiche l'état du système, l'application le modifie.
   - Techno 🟡 : **Streamlit** (100 % Python, rapide à écrire) plutôt qu'un front web séparé.
 
+## 6 bis. Dimensionnement de l'API
+
+*Décision du 2026-11-18* (protocole et chiffres complets : README, section « Dimensionnement »).
+
+- **Charge cible** : 200 bots de trading qui relisent la dernière prévision et arrivent en rafale au début de
+  chaque heure, plus 20 analystes et 2 opérateurs. SLO : p95 < 200 ms, moins de 1 % d'erreurs.
+- **Règle** : plus petite configuration qui tient le pic et deux fois la cible sur une rampe jusqu'à rupture.
+- **Choix : 1 processus uvicorn, 1 cœur** (défaut de `.env.example`) : p95 de 36 ms au pic, 500 bots tenus
+  (2,5× la cible). 0,5 cœur casse dès 300 bots ; plus de processus coûte de la mémoire (+170 Mio chacun) pour
+  peu ou pas de capacité en plus.
+- **À réévaluer** si la cible change, ou sur une machine dédiée : la mesure partage les cœurs avec le client
+  Locust, et le plafond observé (~300 req/s) semble venir du client ou du pool PostgreSQL plutôt que de l'API.
+
 ## 7. Questions ouvertes
 
 - [x] Horizon de la cible de rendement : **4 h**.
