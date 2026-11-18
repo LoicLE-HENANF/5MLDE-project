@@ -1,0 +1,1065 @@
+{
+  "uid": "projet-traitements",
+  "title": "Traitements",
+  "description": "Flows Prefect, lots d'ingestion, journal des traitements et fraîcheur des données.",
+  "tags": [
+    "5mlde"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "schemaVersion": 41,
+  "version": 1,
+  "time": {
+    "from": "now-2d",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "name": "Repères marche / arrêt",
+        "datasource": {
+          "uid": "projet-traces"
+        },
+        "enable": true,
+        "iconColor": "orange",
+        "target": {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT recorded_at AS time, CASE WHEN active THEN 'Marche' ELSE 'Arrêt' END || ' (' || changed_by || ') : ' || reason AS text, 'systeme' AS tags FROM tracing.system_changes WHERE $__timeFilter(recorded_at)"
+        },
+        "rawQuery": "SELECT recorded_at AS time, CASE WHEN active THEN 'Marche' ELSE 'Arrêt' END || ' (' || changed_by || ') : ' || reason AS text, 'systeme' AS tags FROM tracing.system_changes WHERE $__timeFilter(recorded_at)"
+      }
+    ]
+  },
+  "links": [
+    {
+      "title": "Projet 5MLDE",
+      "type": "dashboards",
+      "tags": [
+        "5mlde"
+      ],
+      "asDropdown": true
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Flows en échec",
+      "description": "Flows Prefect FAILED ou CRASHED sur la période.",
+      "datasource": {
+        "uid": "projet-prefect"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-prefect"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT count(*) AS \"échecs\" FROM flow_run WHERE state_type IN ('FAILED', 'CRASHED') AND $__timeFilter(start_time)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Flows terminés",
+      "description": "",
+      "datasource": {
+        "uid": "projet-prefect"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-prefect"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT count(*) AS \"terminés\" FROM flow_run WHERE state_type = 'COMPLETED' AND $__timeFilter(start_time)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Âge de la dernière bougie",
+      "description": "Temps écoulé depuis la clôture de la dernière bougie en base (ingestion horaire).",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT EXTRACT(EPOCH FROM now() - max(close_time)) AS \"âge\" FROM market.candles"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 7200
+              },
+              {
+                "color": "red",
+                "value": 10800
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Système",
+      "description": "Interrupteur marche / arrêt (tracing.system_changes, piloté par l'API).",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT COALESCE((SELECT active FROM tracing.system_changes ORDER BY id DESC LIMIT 1), true)::int AS \"actif\""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Marche",
+                  "color": "green",
+                  "index": 0
+                },
+                "0": {
+                  "text": "Arrêt",
+                  "color": "red",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Durée des flows",
+      "description": "",
+      "datasource": {
+        "uid": "projet-prefect"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-prefect"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "time_series",
+          "rawSql": "SELECT fr.start_time AS time, f.name AS metric, EXTRACT(EPOCH FROM fr.total_run_time) AS value FROM flow_run fr JOIN flow f ON f.id = fr.flow_id WHERE fr.start_time IS NOT NULL AND $__timeFilter(fr.start_time) ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "always",
+            "pointSize": 6,
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "États des flows par heure",
+      "description": "",
+      "datasource": {
+        "uid": "projet-prefect"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-prefect"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(start_time, '1h'), state_type AS metric, count(*) AS value FROM flow_run WHERE start_time IS NOT NULL AND $__timeFilter(start_time) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "auto",
+            "pointSize": 6,
+            "spanNulls": true,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "COMPLETED"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "FAILED"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CRASHED"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "dark-red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CANCELLED"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Derniers flows Prefect",
+      "description": "",
+      "datasource": {
+        "uid": "projet-prefect"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 24,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-prefect"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT fr.start_time AS \"début\", f.name AS flow, d.name AS \"déploiement\", fr.state_name AS \"état\", round(EXTRACT(EPOCH FROM fr.total_run_time)::numeric, 1) AS \"durée (s)\", fr.name AS run FROM flow_run fr JOIN flow f ON f.id = fr.flow_id LEFT JOIN deployment d ON d.id = fr.deployment_id WHERE $__timeFilter(fr.start_time) ORDER BY fr.start_time DESC LIMIT 50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "état"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "COMPLETED": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "Completed": {
+                        "color": "green",
+                        "index": 1
+                      },
+                      "FAILED": {
+                        "color": "red",
+                        "index": 2
+                      },
+                      "Failed": {
+                        "color": "red",
+                        "index": 3
+                      },
+                      "CRASHED": {
+                        "color": "dark-red",
+                        "index": 4
+                      },
+                      "Crashed": {
+                        "color": "dark-red",
+                        "index": 5
+                      },
+                      "CANCELLED": {
+                        "color": "orange",
+                        "index": 6
+                      },
+                      "Cancelled": {
+                        "color": "orange",
+                        "index": 7
+                      },
+                      "RUNNING": {
+                        "color": "blue",
+                        "index": 8
+                      },
+                      "Running": {
+                        "color": "blue",
+                        "index": 9
+                      },
+                      "SCHEDULED": {
+                        "color": "text",
+                        "index": 10
+                      },
+                      "Scheduled": {
+                        "color": "text",
+                        "index": 11
+                      },
+                      "success": {
+                        "color": "green",
+                        "index": 12
+                      },
+                      "failure": {
+                        "color": "red",
+                        "index": 13
+                      },
+                      "cancelled": {
+                        "color": "orange",
+                        "index": 14
+                      },
+                      "accepted": {
+                        "color": "green",
+                        "index": 15
+                      },
+                      "rejected": {
+                        "color": "red",
+                        "index": 16
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Lots d'ingestion par heure",
+      "description": "",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(recorded_at, '1h'), status AS metric, count(*) AS value FROM tracing.ingestion_batches WHERE $__timeFilter(recorded_at) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "auto",
+            "pointSize": 6,
+            "spanNulls": true,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "accepted"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rejected"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Lots rejetés ou signalés",
+      "description": "Anomalies qualité : bloquantes (lot rejeté) ou signalées (lot accepté).",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 21,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT recorded_at AS \"date\", symbol AS \"symbole\", source, period_start AS \"début\", status AS \"statut\", rows AS \"lignes\", issues::text AS \"anomalies\" FROM tracing.ingestion_batches WHERE $__timeFilter(recorded_at) AND (status = 'rejected' OR jsonb_array_length(issues) > 0) ORDER BY recorded_at DESC LIMIT 50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "statut"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "COMPLETED": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "Completed": {
+                        "color": "green",
+                        "index": 1
+                      },
+                      "FAILED": {
+                        "color": "red",
+                        "index": 2
+                      },
+                      "Failed": {
+                        "color": "red",
+                        "index": 3
+                      },
+                      "CRASHED": {
+                        "color": "dark-red",
+                        "index": 4
+                      },
+                      "Crashed": {
+                        "color": "dark-red",
+                        "index": 5
+                      },
+                      "CANCELLED": {
+                        "color": "orange",
+                        "index": 6
+                      },
+                      "Cancelled": {
+                        "color": "orange",
+                        "index": 7
+                      },
+                      "RUNNING": {
+                        "color": "blue",
+                        "index": 8
+                      },
+                      "Running": {
+                        "color": "blue",
+                        "index": 9
+                      },
+                      "SCHEDULED": {
+                        "color": "text",
+                        "index": 10
+                      },
+                      "Scheduled": {
+                        "color": "text",
+                        "index": 11
+                      },
+                      "success": {
+                        "color": "green",
+                        "index": 12
+                      },
+                      "failure": {
+                        "color": "red",
+                        "index": 13
+                      },
+                      "cancelled": {
+                        "color": "orange",
+                        "index": 14
+                      },
+                      "accepted": {
+                        "color": "green",
+                        "index": 15
+                      },
+                      "rejected": {
+                        "color": "red",
+                        "index": 16
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Journal des traitements",
+      "description": "tracing.pipeline_runs : un résumé par exécution de flow (écrit par le flow lui-même).",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 24,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT started_at AS \"début\", pipeline, status AS \"statut\", round(EXTRACT(EPOCH FROM ended_at - started_at)::numeric, 1) AS \"durée (s)\", details::text AS \"détails\" FROM tracing.pipeline_runs WHERE $__timeFilter(started_at) ORDER BY id DESC LIMIT 50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "statut"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "COMPLETED": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "Completed": {
+                        "color": "green",
+                        "index": 1
+                      },
+                      "FAILED": {
+                        "color": "red",
+                        "index": 2
+                      },
+                      "Failed": {
+                        "color": "red",
+                        "index": 3
+                      },
+                      "CRASHED": {
+                        "color": "dark-red",
+                        "index": 4
+                      },
+                      "Crashed": {
+                        "color": "dark-red",
+                        "index": 5
+                      },
+                      "CANCELLED": {
+                        "color": "orange",
+                        "index": 6
+                      },
+                      "Cancelled": {
+                        "color": "orange",
+                        "index": 7
+                      },
+                      "RUNNING": {
+                        "color": "blue",
+                        "index": 8
+                      },
+                      "Running": {
+                        "color": "blue",
+                        "index": 9
+                      },
+                      "SCHEDULED": {
+                        "color": "text",
+                        "index": 10
+                      },
+                      "Scheduled": {
+                        "color": "text",
+                        "index": 11
+                      },
+                      "success": {
+                        "color": "green",
+                        "index": 12
+                      },
+                      "failure": {
+                        "color": "red",
+                        "index": 13
+                      },
+                      "cancelled": {
+                        "color": "orange",
+                        "index": 14
+                      },
+                      "accepted": {
+                        "color": "green",
+                        "index": 15
+                      },
+                      "rejected": {
+                        "color": "red",
+                        "index": 16
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Prix de clôture (base 100)",
+      "description": "Bougies récentes (market.candles), base 100 au début de la période.",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 38,
+        "w": 24,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "time_series",
+          "rawSql": "SELECT open_time AS time, symbol AS metric, 100 * close / first_value(close) OVER (PARTITION BY symbol ORDER BY open_time) AS value FROM market.candles WHERE $__timeFilter(open_time) ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "auto",
+            "pointSize": 6,
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}

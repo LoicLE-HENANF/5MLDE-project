@@ -1,0 +1,1050 @@
+{
+  "uid": "projet-service",
+  "title": "Service",
+  "description": "Prévisions servies, retours une fois l'horizon clôturé et santé quotidienne des versions.",
+  "tags": [
+    "5mlde"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "schemaVersion": 41,
+  "version": 1,
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "modele",
+        "label": "Modèle",
+        "type": "query",
+        "datasource": {
+          "uid": "projet-traces"
+        },
+        "query": "SELECT DISTINCT model_name FROM tracing.predictions ORDER BY 1",
+        "definition": "SELECT DISTINCT model_name FROM tracing.predictions ORDER BY 1",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "sort": 1,
+        "current": {},
+        "options": []
+      },
+      {
+        "name": "symbole",
+        "label": "Symbole",
+        "type": "query",
+        "datasource": {
+          "uid": "projet-traces"
+        },
+        "query": "SELECT DISTINCT symbol FROM market.candles ORDER BY 1",
+        "definition": "SELECT DISTINCT symbol FROM market.candles ORDER BY 1",
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": []
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "name": "Repères registre",
+        "datasource": {
+          "uid": "projet-traces"
+        },
+        "enable": true,
+        "iconColor": "purple",
+        "target": {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT recorded_at AS time, event || COALESCE(' ' || alias, '') || ' v' || version AS text, 'registre' AS tags FROM tracing.model_events WHERE model_name = '$modele' AND $__timeFilter(recorded_at)"
+        },
+        "rawQuery": "SELECT recorded_at AS time, event || COALESCE(' ' || alias, '') || ' v' || version AS text, 'registre' AS tags FROM tracing.model_events WHERE model_name = '$modele' AND $__timeFilter(recorded_at)"
+      },
+      {
+        "name": "Repères marche / arrêt",
+        "datasource": {
+          "uid": "projet-traces"
+        },
+        "enable": true,
+        "iconColor": "orange",
+        "target": {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT recorded_at AS time, CASE WHEN active THEN 'Marche' ELSE 'Arrêt' END || ' (' || changed_by || ') : ' || reason AS text, 'systeme' AS tags FROM tracing.system_changes WHERE $__timeFilter(recorded_at)"
+        },
+        "rawQuery": "SELECT recorded_at AS time, CASE WHEN active THEN 'Marche' ELSE 'Arrêt' END || ' (' || changed_by || ') : ' || reason AS text, 'systeme' AS tags FROM tracing.system_changes WHERE $__timeFilter(recorded_at)"
+      }
+    ]
+  },
+  "links": [
+    {
+      "title": "Projet 5MLDE",
+      "type": "dashboards",
+      "tags": [
+        "5mlde"
+      ],
+      "asDropdown": true
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Champion en service",
+      "description": "Version du champion ayant produit la dernière prévision.",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT version AS \"version\" FROM tracing.predictions WHERE model_name = '$modele' AND mode = 'live' AND alias = 'champion' ORDER BY id DESC LIMIT 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Âge de la dernière prévision",
+      "description": "",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT EXTRACT(EPOCH FROM now() - max(recorded_at)) AS \"âge\" FROM tracing.predictions WHERE model_name = '$modele' AND mode = 'live'"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 7200
+              },
+              {
+                "color": "red",
+                "value": 10800
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Retours sur la période",
+      "description": "Prévisions dont l'horizon est clôturé et la valeur réalisée connue.",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT count(*) AS \"retours\" FROM tracing.feedback f JOIN tracing.predictions p ON p.id = f.prediction_id WHERE p.model_name = '$modele' AND p.mode = 'live' AND $__timeFilter(f.recorded_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Versions dégradées (7 jours)",
+      "description": "Niveau 3 : version moins bonne que la référence naïve sur sa fenêtre glissante.",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT count(DISTINCT version) AS \"dégradées\" FROM tracing.model_health WHERE model_name = '$modele' AND mode = 'live' AND degraded AND day >= current_date - 7"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Prévision du champion et référence naïve",
+      "description": "Prévision faite à la clôture de chaque bougie (horizon du modèle), référence naïve en pointillés.",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "time_series",
+          "rawSql": "SELECT open_time AS time, symbol || ' prévision' AS metric, prediction AS value FROM tracing.predictions WHERE model_name = '$modele' AND mode = 'live' AND alias = 'champion' AND symbol IN ($symbole) AND $__timeFilter(open_time) UNION ALL SELECT open_time, symbol || ' référence', baseline FROM tracing.predictions WHERE model_name = '$modele' AND mode = 'live' AND alias = 'champion' AND baseline IS NOT NULL AND symbol IN ($symbole) AND $__timeFilter(open_time) ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "always",
+            "pointSize": 6,
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*référence"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Position du champion",
+      "description": "Poids du portefeuille simulé (paper trading).",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "time_series",
+          "rawSql": "SELECT open_time AS time, symbol AS metric, position AS value FROM tracing.predictions WHERE model_name = '$modele' AND mode = 'live' AND alias = 'champion' AND position IS NOT NULL AND symbol IN ($symbole) AND $__timeFilter(open_time) ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "always",
+            "pointSize": 6,
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Champion et challenger",
+      "description": "Le challenger prédit en parallèle, sans position.",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "time_series",
+          "rawSql": "SELECT open_time AS time, symbol || ' ' || alias || ' v' || version AS metric, prediction AS value FROM tracing.predictions WHERE model_name = '$modele' AND mode = 'live' AND symbol IN ($symbole) AND $__timeFilter(open_time) ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "always",
+            "pointSize": 6,
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*challenger.*"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Perte quotidienne des retours",
+      "description": "Perte moyenne par jour de prévision (QLIKE pour la volatilité ; plus bas = mieux).",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(p.open_time, '1d'), p.alias || ' v' || p.version AS metric, avg(f.loss) AS value FROM tracing.feedback f JOIN tracing.predictions p ON p.id = f.prediction_id WHERE p.model_name = '$modele' AND p.mode = 'live' AND p.symbol IN ($symbole) AND $__timeFilter(p.open_time) GROUP BY 1, 2 UNION ALL SELECT $__timeGroupAlias(p.open_time, '1d'), 'référence', avg(f.baseline_loss) FROM tracing.feedback f JOIN tracing.predictions p ON p.id = f.prediction_id WHERE p.model_name = '$modele' AND p.mode = 'live' AND p.alias = 'champion' AND p.symbol IN ($symbole) AND $__timeFilter(p.open_time) GROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "always",
+            "pointSize": 6,
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "référence"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Santé quotidienne (niveau 3)",
+      "description": "Métrique glissante par version comparée à la référence naïve.",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 21,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "time_series",
+          "rawSql": "SELECT day::timestamptz AS time, metric || ' v' || version AS metric, value FROM tracing.model_health WHERE model_name = '$modele' AND mode = 'live' AND $__timeFilter(day::timestamptz) UNION ALL SELECT day::timestamptz, metric || ' référence v' || version, baseline_value FROM tracing.model_health WHERE model_name = '$modele' AND mode = 'live' AND baseline_value IS NOT NULL AND $__timeFilter(day::timestamptz) ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "always",
+            "pointSize": 6,
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*référence.*"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "PnL simulé (niveau 3)",
+      "description": "PnL du portefeuille simulé sur la fenêtre, frais inclus, comparé à l'équipondéré.",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "time_series",
+          "rawSql": "SELECT day::timestamptz AS time, 'v' || version || ' ciblage' AS metric, pnl AS value FROM tracing.model_health WHERE model_name = '$modele' AND mode = 'live' AND pnl IS NOT NULL AND $__timeFilter(day::timestamptz) UNION ALL SELECT day::timestamptz, 'v' || version || ' équipondéré', baseline_pnl FROM tracing.model_health WHERE model_name = '$modele' AND mode = 'live' AND baseline_pnl IS NOT NULL AND $__timeFilter(day::timestamptz) ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "always",
+            "pointSize": 6,
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "percentunit"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*équipondéré"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Dernières prévisions",
+      "description": "",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 29,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT DISTINCT ON (symbol, alias) symbol AS \"symbole\", alias, version, open_time AS \"bougie\", horizon_hours AS \"horizon (h)\", prediction AS \"prévision\", baseline AS \"référence\", position, recorded_at AS \"écrite le\" FROM tracing.predictions WHERE model_name = '$modele' AND mode = 'live' ORDER BY symbol, alias, open_time DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "alias"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "champion": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "challenger": {
+                        "color": "blue",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "Santé par version",
+      "description": "",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT day AS \"jour\", version, metric AS \"mesure\", samples AS \"échantillons\", value AS \"valeur\", baseline_value AS \"référence\", pnl, baseline_pnl AS \"PnL équipondéré\", CASE WHEN degraded THEN 'oui' ELSE 'non' END AS \"dégradée\" FROM tracing.model_health WHERE model_name = '$modele' AND mode = 'live' ORDER BY day DESC, version DESC LIMIT 60"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dégradée"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "oui": {
+                        "color": "red",
+                        "index": 0
+                      },
+                      "non": {
+                        "color": "green",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 13,
+      "type": "table",
+      "title": "Historique marche / arrêt",
+      "description": "",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 45,
+        "w": 24,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT recorded_at AS \"date\", CASE WHEN active THEN 'Marche' ELSE 'Arrêt' END AS \"état\", changed_by AS \"par\", reason AS \"raison\" FROM tracing.system_changes ORDER BY id DESC LIMIT 20"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "état"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "Marche": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "Arrêt": {
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    }
+  ]
+}

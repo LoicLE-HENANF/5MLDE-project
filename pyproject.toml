@@ -22,11 +22,14 @@ dependencies = [
   "matplotlib>=3.10",
   # Serveur de l'API (src/api).
   "uvicorn>=0.34",
+  # Application de pilotage (src/app), cliente de l'API uniquement.
+  "streamlit>=1.50",
 ]
 
 [dependency-groups]
 dev = [
   "pytest==8.3.5",
+  "pyyaml==6.0.3",
   "ruff==0.14.4",
 ]
 
@@ -42,6 +45,7 @@ source = "vcs"
 [tool.hatch.build.targets.wheel]
 packages = [
   "src/api",
+  "src/app",
   "src/connectors",
   "src/features",
   "src/flows",
@@ -75,4 +79,4 @@ select = ["E", "W", "F", "I", "B", "UP", "BLE", "SIM", "RUF"]
 quote-style = "single"
 
 [tool.ruff.lint.isort]
-known-first-party = ["api", "connectors", "features", "flows", "ingestion", "lineage", "marketdata", "registry", "serving", "strategies", "training"]
+known-first-party = ["api", "app", "connectors", "features", "flows", "ingestion", "lineage", "marketdata", "registry", "serving", "strategies", "training"]
