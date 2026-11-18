@@ -179,7 +179,10 @@ services:
 
   api:
     <<: *app
-    command: ["uvicorn", "api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+    # Processus uvicorn et limite CPU (cœurs) : dimensionnés par le test de charge (loadtest/, README).
+    command: ["uvicorn", "api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000",
+              "--workers", "${API_WORKERS:-1}"]
+    cpus: ${API_CPUS:-1}
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"
     healthcheck:

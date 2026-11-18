@@ -32,6 +32,9 @@ dev = [
   "pyyaml==6.0.3",
   "ruff==0.14.4",
 ]
+load = [
+    "locust==2.47.0",  # test de charge (loadtest/), hors image : uv run --group load ...
+]
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
@@ -64,6 +67,7 @@ cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true 
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]  # loadtest/ (hors paquet installé)
 markers = ["integration: nécessite la stack docker compose démarrée (uv run pytest -m integration)"]
 addopts = "-m 'not integration'"
 
@@ -79,4 +83,4 @@ select = ["E", "W", "F", "I", "B", "UP", "BLE", "SIM", "RUF"]
 quote-style = "single"
 
 [tool.ruff.lint.isort]
-known-first-party = ["api", "app", "connectors", "features", "flows", "ingestion", "lineage", "marketdata", "registry", "serving", "strategies", "training"]
+known-first-party = ["api", "app", "loadtest", "connectors", "features", "flows", "ingestion", "lineage", "marketdata", "registry", "serving", "strategies", "training"]

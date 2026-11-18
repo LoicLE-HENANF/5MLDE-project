@@ -188,7 +188,21 @@
         ["tracing.predictions", "predict", "Prévisions servies (champion) et parallèles (challenger)"],
         ["tracing.feedback", "feedback", "Valeur réalisée et perte QLIKE de chaque prévision"],
         ["tracing.model_health", "feedback", "Santé quotidienne par version (niveau 3)"],
-        ["tracing.system_changes", "API", "Interrupteur marche / arrêt du système"]
+        ["tracing.system_changes", "API", "Interrupteur marche / arrêt du système"],
+        ["tracing.load_tests", "loadtest", "Résultats des tests de charge (configuration × scénario)"]
+      ]
+    },
+    {
+      "id": "dimensionnement",
+      "titre": "Dimensionnement de l'API (test de charge du 2026-11-18)",
+      "colonnes": ["Configuration", "p95 au pic", "Bots tenus", "Recommandée"],
+      "lignes": [
+        ["1 processus, 0,5 cœur", "71 ms", "200", ""],
+        ["2 processus, 0,5 cœur", "54 ms", "200", ""],
+        ["4 processus, 0,5 cœur", "49 ms", "200", ""],
+        ["1 processus, 1 cœur", "36 ms", "500", "oui : cible 200 bots, marge 2,5×"],
+        ["2 processus, 1 cœur", "23 ms", "600", ""],
+        ["4 processus, 1 cœur", "22 ms", "600", ""]
       ]
     }
   ]

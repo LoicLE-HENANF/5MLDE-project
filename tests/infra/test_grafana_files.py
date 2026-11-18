@@ -34,7 +34,7 @@ def _rules() -> list[dict]:
 
 def test_dashboards_are_present_with_unique_uids():
     boards = _dashboards()
-    assert set(boards) == {'projet-traitements', 'projet-modeles', 'projet-service'}
+    assert set(boards) == {'projet-traitements', 'projet-modeles', 'projet-service', 'projet-charge'}
     assert len(boards) == len(DASHBOARDS)
 
 

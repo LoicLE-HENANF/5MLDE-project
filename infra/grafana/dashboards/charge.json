@@ -1,0 +1,685 @@
+{
+  "uid": "projet-charge",
+  "title": "Charge",
+  "description": "Test de charge et dimensionnement de l'API : régime normal, pic de début d'heure, rampe jusqu'à rupture, pour chaque configuration (processus uvicorn × cœurs).",
+  "tags": [
+    "5mlde"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "schemaVersion": 41,
+  "version": 1,
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "campagne",
+        "label": "Campagne",
+        "type": "query",
+        "datasource": {
+          "uid": "projet-traces"
+        },
+        "query": "SELECT DISTINCT campaign FROM tracing.load_tests ORDER BY 1 DESC",
+        "definition": "SELECT DISTINCT campaign FROM tracing.load_tests ORDER BY 1 DESC",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "sort": 1,
+        "current": {},
+        "options": []
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "links": [
+    {
+      "title": "Projet 5MLDE",
+      "type": "dashboards",
+      "tags": [
+        "5mlde"
+      ],
+      "asDropdown": true
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Configuration recommandée",
+      "description": "Plus petite configuration de l'API (processus uvicorn, cœurs) qui tient le pic et deux fois la cible sur la rampe en respectant le SLO.",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT workers || 'w / ' || rtrim(rtrim(cpus::text, '0'), '.') || ' CPU' AS \"configuration\" FROM tracing.load_tests WHERE campaign = '$campagne' AND recommended AND scenario = 'rupture' LIMIT 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Capacité (bots)",
+      "description": "Bots simultanés tenus par la configuration recommandée avant rupture du SLO.",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT users AS \"bots\" FROM tracing.load_tests WHERE campaign = '$campagne' AND recommended AND scenario = 'rupture' LIMIT 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "p95 au pic",
+      "description": "Pic de début d'heure (200 bots arrivés en 10 s), configuration recommandée. SLO : 200 ms.",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT p95_ms AS \"p95\" FROM tracing.load_tests WHERE campaign = '$campagne' AND scenario = 'pic' AND (workers, cpus) IN (SELECT workers, cpus FROM tracing.load_tests WHERE campaign = '$campagne' AND recommended AND scenario = 'rupture')"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 200
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Débit au point de rupture",
+      "description": "",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT rps AS \"débit\" FROM tracing.load_tests WHERE campaign = '$campagne' AND recommended AND scenario = 'rupture' LIMIT 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 5,
+      "type": "barchart",
+      "title": "Capacité par configuration",
+      "description": "Dernier palier de la rampe tenant le SLO (p95 < 200 ms, erreurs < 1 %).",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT workers || 'w / ' || rtrim(rtrim(cpus::text, '0'), '.') || ' CPU' AS \"configuration\", users AS \"bots tenus\" FROM tracing.load_tests WHERE campaign = '$campagne' AND scenario = 'rupture' ORDER BY cpus, workers"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 1
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "showValue": "auto",
+        "groupWidth": 0.7,
+        "barWidth": 0.9,
+        "stacking": "none",
+        "xTickLabelRotation": 0,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "barchart",
+      "title": "Latence au pic par configuration",
+      "description": "Percentiles de latence pendant le pic de début d'heure.",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT workers || 'w / ' || rtrim(rtrim(cpus::text, '0'), '.') || ' CPU' AS \"configuration\", p50_ms AS \"p50\", p95_ms AS \"p95\", p99_ms AS \"p99\" FROM tracing.load_tests WHERE campaign = '$campagne' AND scenario = 'pic' ORDER BY cpus, workers"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 1
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "showValue": "auto",
+        "groupWidth": 0.7,
+        "barWidth": 0.9,
+        "stacking": "none",
+        "xTickLabelRotation": 0,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "barchart",
+      "title": "Latence p95 sur la rampe",
+      "description": "p95 de chaque palier de la rampe, par configuration ; la rampe s'arrête au premier palier hors SLO.",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 24,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT (r->>'bots')::int::text AS \"bots\", max((r->>'p95_ms')::float) FILTER (WHERE workers || 'w / ' || rtrim(rtrim(cpus::text, '0'), '.') || ' CPU' = '1w / 0.5 CPU') AS \"1w / 0.5 CPU\" , max((r->>'p95_ms')::float) FILTER (WHERE workers || 'w / ' || rtrim(rtrim(cpus::text, '0'), '.') || ' CPU' = '2w / 0.5 CPU') AS \"2w / 0.5 CPU\" , max((r->>'p95_ms')::float) FILTER (WHERE workers || 'w / ' || rtrim(rtrim(cpus::text, '0'), '.') || ' CPU' = '4w / 0.5 CPU') AS \"4w / 0.5 CPU\" , max((r->>'p95_ms')::float) FILTER (WHERE workers || 'w / ' || rtrim(rtrim(cpus::text, '0'), '.') || ' CPU' = '1w / 1 CPU') AS \"1w / 1 CPU\" , max((r->>'p95_ms')::float) FILTER (WHERE workers || 'w / ' || rtrim(rtrim(cpus::text, '0'), '.') || ' CPU' = '2w / 1 CPU') AS \"2w / 1 CPU\" , max((r->>'p95_ms')::float) FILTER (WHERE workers || 'w / ' || rtrim(rtrim(cpus::text, '0'), '.') || ' CPU' = '4w / 1 CPU') AS \"4w / 1 CPU\" FROM tracing.load_tests, jsonb_array_elements(details->'ramp') r WHERE campaign = '$campagne' AND scenario = 'rupture' GROUP BY (r->>'bots')::int ORDER BY (r->>'bots')::int"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 1
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "showValue": "auto",
+        "groupWidth": 0.7,
+        "barWidth": 0.9,
+        "stacking": "none",
+        "xTickLabelRotation": 0,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "barchart",
+      "title": "CPU au point de rupture",
+      "description": "docker stats, moyenne sur le palier (100 % = un cœur).",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT workers || 'w / ' || rtrim(rtrim(cpus::text, '0'), '.') || ' CPU' AS \"configuration\", api_cpu_pct AS \"api\", pg_cpu_pct AS \"postgres\" FROM tracing.load_tests WHERE campaign = '$campagne' AND scenario = 'rupture' ORDER BY cpus, workers"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 1
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "showValue": "auto",
+        "groupWidth": 0.7,
+        "barWidth": 0.9,
+        "stacking": "none",
+        "xTickLabelRotation": 0,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "barchart",
+      "title": "Mémoire au point de rupture",
+      "description": "docker stats, maximum sur le palier.",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 21,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT workers || 'w / ' || rtrim(rtrim(cpus::text, '0'), '.') || ' CPU' AS \"configuration\", api_mem_mb AS \"api\", pg_mem_mb AS \"postgres\" FROM tracing.load_tests WHERE campaign = '$campagne' AND scenario = 'rupture' ORDER BY cpus, workers"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 1
+          },
+          "unit": "decmbytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "showValue": "auto",
+        "groupWidth": 0.7,
+        "barWidth": 0.9,
+        "stacking": "none",
+        "xTickLabelRotation": 0,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Résultats de la campagne",
+      "description": "Rupture : dernier palier de la rampe tenant le SLO (premier palier si aucun).",
+      "datasource": {
+        "uid": "projet-traces"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 24,
+        "h": 12
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "uid": "projet-traces"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT workers || 'w / ' || rtrim(rtrim(cpus::text, '0'), '.') || ' CPU' AS \"configuration\", scenario AS \"scénario\", users AS \"utilisateurs\", round(rps::numeric, 1) AS \"req/s\", round(p50_ms::numeric) AS \"p50 (ms)\", round(p95_ms::numeric) AS \"p95 (ms)\", round(p99_ms::numeric) AS \"p99 (ms)\", round((100.0 * failures / NULLIF(requests, 0))::numeric, 2) AS \"erreurs (%)\", round(api_cpu_pct::numeric) AS \"CPU api (%)\", round(api_mem_mb::numeric) AS \"mém. api (Mio)\", round(pg_cpu_pct::numeric) AS \"CPU postgres (%)\", CASE WHEN slo_ok THEN 'tenu' ELSE 'hors SLO' END AS \"SLO\", CASE WHEN recommended THEN 'oui' ELSE '' END AS \"recommandée\" FROM tracing.load_tests WHERE campaign = '$campagne' ORDER BY cpus, workers, array_position(ARRAY['normal', 'pic', 'rupture'], scenario)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SLO"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "tenu": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "hors SLO": {
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "recommandée"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "oui": {
+                        "color": "blue",
+                        "index": 0
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    }
+  ]
+}

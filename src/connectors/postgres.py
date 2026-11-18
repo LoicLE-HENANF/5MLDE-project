@@ -89,6 +89,31 @@ TABLES: dict[str, frozenset[str]] = {
     ),
     # État du système : infra/postgres/init/005-system.sql.
     'system_changes': frozenset({'active', 'previous', 'changed_by', 'reason'}),
+    # Tests de charge : infra/postgres/init/006-load.sql.
+    'load_tests': frozenset(
+        {
+            'campaign',
+            'scenario',
+            'workers',
+            'cpus',
+            'users',
+            'duration_s',
+            'requests',
+            'failures',
+            'rps',
+            'p50_ms',
+            'p95_ms',
+            'p99_ms',
+            'max_ms',
+            'api_cpu_pct',
+            'api_mem_mb',
+            'pg_cpu_pct',
+            'pg_mem_mb',
+            'slo_ok',
+            'recommended',
+            'details',
+        }
+    ),
 }
 RUN_STATUSES = ('success', 'failure', 'cancelled')
 MODEL_EVENTS = ('registered', 'promoted', 'retired')
@@ -96,6 +121,7 @@ BATCH_SOURCES = ('archive', 'rest')
 BATCH_STATUSES = ('accepted', 'rejected')
 PREDICTION_ALIASES = ('champion', 'challenger')
 PREDICTION_MODES = ('live', 'replay')
+LOAD_SCENARIOS = ('normal', 'pic', 'rupture')
 APPLICATION_NAME = '5mlde-project'
 
 
@@ -470,6 +496,63 @@ class PostgresConnector:
                 'previous': previous,
                 'changed_by': changed_by.strip(),
                 'reason': reason.strip(),
+            },
+        )
+
+    # -- tests de charge ---------------------------------------------------------------------------
+    def record_load_test(
+        self,
+        *,
+        campaign: str,
+        scenario: str,
+        workers: int,
+        cpus: float,
+        users: int,
+        duration_s: float,
+        requests: int,
+        failures: int,
+        slo_ok: bool,
+        recommended: bool = False,
+        p50_ms: float | None = None,
+        p95_ms: float | None = None,
+        p99_ms: float | None = None,
+        max_ms: float | None = None,
+        api_cpu_pct: float | None = None,
+        api_mem_mb: float | None = None,
+        pg_cpu_pct: float | None = None,
+        pg_mem_mb: float | None = None,
+        details: Mapping[str, Any] | None = None,
+    ) -> int:
+        """Trace le résultat d'un scénario de charge pour une configuration de l'API."""
+        if scenario not in LOAD_SCENARIOS:
+            raise ValueError(f'scénario {scenario!r} invalide (attendu : {LOAD_SCENARIOS})')
+        if workers <= 0 or cpus <= 0 or duration_s <= 0:
+            raise ValueError('workers, cpus et duration_s doivent être strictement positifs')
+        if users < 0 or not 0 <= failures <= requests:
+            raise ValueError('compteurs invalides (users >= 0, 0 <= failures <= requests)')
+        return self.insert(
+            'load_tests',
+            {
+                'campaign': campaign,
+                'scenario': scenario,
+                'workers': int(workers),
+                'cpus': float(cpus),
+                'users': int(users),
+                'duration_s': float(duration_s),
+                'requests': int(requests),
+                'failures': int(failures),
+                'rps': requests / duration_s,
+                'p50_ms': _optional(p50_ms),
+                'p95_ms': _optional(p95_ms),
+                'p99_ms': _optional(p99_ms),
+                'max_ms': _optional(max_ms),
+                'api_cpu_pct': _optional(api_cpu_pct),
+                'api_mem_mb': _optional(api_mem_mb),
+                'pg_cpu_pct': _optional(pg_cpu_pct),
+                'pg_mem_mb': _optional(pg_mem_mb),
+                'slo_ok': bool(slo_ok),
+                'recommended': bool(recommended),
+                'details': dict(details or {}),
             },
         )
 
