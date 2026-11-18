@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from numpy.typing import ArrayLike
 
 
 def information_coefficient(
@@ -89,3 +90,34 @@ def icir(information_coefficients: pd.Series) -> float:
     if standard_deviation == 0:
         return float('nan')
     return float(np.mean(values) / standard_deviation)
+
+
+def qlike(predicted_volatility: ArrayLike, realized_volatility: ArrayLike) -> float:
+    """Perte QLIKE moyenne entre volatilités prédites et réalisées (même horizon).
+
+    Calculée sur les variances : `mean(r² / p² - log(r² / p²) - 1)`. Nulle pour une
+    prévision parfaite, elle pénalise davantage la sous-estimation du risque que sa
+    surestimation et reste robuste au bruit de la volatilité réalisée.
+    """
+    predicted, realized = _positive_pair(predicted_volatility, realized_volatility)
+    ratio = (realized / predicted) ** 2
+    return float(np.mean(ratio - np.log(ratio) - 1))
+
+
+def log_volatility_mae(predicted_volatility: ArrayLike, realized_volatility: ArrayLike) -> float:
+    """Erreur absolue moyenne entre les logarithmes des volatilités prédites et réalisées."""
+    predicted, realized = _positive_pair(predicted_volatility, realized_volatility)
+    return float(np.mean(np.abs(np.log(predicted) - np.log(realized))))
+
+
+def _positive_pair(predicted: ArrayLike, realized: ArrayLike) -> tuple[np.ndarray, np.ndarray]:
+    predicted_values = np.asarray(predicted, dtype='float64')
+    realized_values = np.asarray(realized, dtype='float64')
+    if predicted_values.ndim != 1 or predicted_values.shape != realized_values.shape:
+        raise ValueError('prédictions et réalisations doivent être deux vecteurs de même longueur')
+    if predicted_values.size == 0:
+        raise ValueError('impossible de calculer une perte sur un jeu de données vide')
+    for name, values in (('prédites', predicted_values), ('réalisées', realized_values)):
+        if not np.isfinite(values).all() or (values <= 0).any():
+            raise ValueError(f'les volatilités {name} doivent être finies et strictement positives')
+    return predicted_values, realized_values
