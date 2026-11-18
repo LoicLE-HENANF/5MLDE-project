@@ -18,9 +18,9 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from features import target_volatility
+from features import target_return, target_volatility
 from strategies import DEFAULT_FEE, backtest, to_wide
-from training.metrics import qlike
+from training.metrics import information_coefficient, qlike
 
 DEFAULT_WINDOW_HOURS = 7 * 24
 INTERVAL = pd.Timedelta(hours=1)
@@ -75,6 +75,30 @@ def realized_feedback(pending: pd.DataFrame, candles: pd.DataFrame, *, as_of: pd
         for b, r in zip(merged['baseline'], merged['realized'], strict=True)
     ]
     merged = merged.loc[merged['loss'].notna()]
+    return merged.loc[:, columns].reset_index(drop=True)
+
+
+def realized_return_feedback(
+    pending: pd.DataFrame, candles: pd.DataFrame, *, as_of: pd.Timestamp
+) -> pd.DataFrame:
+    """Rendement réalisé et erreurs quadratiques des prédictions rendement et momentum."""
+    columns = ['prediction_id', 'realized', 'loss', 'baseline_loss']
+    if pending.empty:
+        return pd.DataFrame(columns=columns)
+    scored = []
+    for hours, group in pending.groupby('horizon_hours'):
+        realized = target_return(candles, hours=int(hours), as_of=as_of)
+        merged = group.merge(realized, on=['symbol', 'open_time'], how='inner')
+        scored.append(merged.dropna(subset=['target_return']))
+    merged = pd.concat(scored, ignore_index=True)
+    if merged.empty:
+        return pd.DataFrame(columns=columns)
+    merged['realized'] = merged['target_return'].astype('float64')
+    merged['loss'] = np.square(merged['prediction'].astype('float64') - merged['realized'])
+    merged['baseline_loss'] = [
+        None if pd.isna(baseline) else float((float(baseline) - realized) ** 2)
+        for baseline, realized in zip(merged['baseline'], merged['realized'], strict=True)
+    ]
     return merged.loc[:, columns].reset_index(drop=True)
 
 
@@ -145,3 +169,66 @@ def health_rows(
             }
         )
     return rows
+
+
+def return_health_rows(
+    scored: pd.DataFrame,
+    candles: pd.DataFrame,
+    *,
+    day: date,
+    window_hours: int = DEFAULT_WINDOW_HOURS,
+    fee: float = DEFAULT_FEE,
+) -> list[dict[str, Any]]:
+    """IC glissant, PnL paper et santé quotidienne des versions rendement."""
+    if window_hours <= 0:
+        raise ValueError('window_hours doit être strictement positif')
+    if scored.empty:
+        return []
+    end = pd.Timestamp(day, tz='UTC') + pd.Timedelta(days=1)
+    start = end - pd.Timedelta(hours=window_hours)
+    frame = scored.assign(open_time=pd.to_datetime(scored['open_time'], utc=True))
+    frame = frame.loc[(frame['open_time'] >= start) & (frame['open_time'] < end)]
+    rows = []
+    for (name, version, mode), group in frame.groupby(['model_name', 'version', 'mode'], sort=True):
+        value = _mean_ic(group, 'prediction')
+        baseline_value = _mean_ic(group, 'baseline')
+        positions = group.loc[:, ['symbol', 'open_time', 'position']]
+        equal = group.loc[:, ['symbol', 'open_time']].assign(position=1.0)
+        equal['position'] = equal['position'] / equal.groupby('open_time')['symbol'].transform('count')
+        has_positions = group['position'].notna().any()
+        pnl = _pnl(positions, candles, fee) if has_positions else None
+        baseline_pnl = _pnl(equal, candles, fee) if has_positions else None
+        rows.append(
+            {
+                'model_name': name,
+                'version': int(version),
+                'mode': mode,
+                'day': day,
+                'window_hours': window_hours,
+                'samples': len(group),
+                'metric': 'ic_spearman',
+                'value': value,
+                'baseline_value': baseline_value,
+                'pnl': pnl,
+                'baseline_pnl': baseline_pnl,
+                'degraded': bool((value is not None and value < 0) or (pnl is not None and pnl < 0)),
+                'details': {
+                    'aliases': sorted(group['alias'].unique().tolist()),
+                    'symboles': sorted(group['symbol'].unique().tolist()),
+                    'debut': start.isoformat(),
+                    'fin': end.isoformat(),
+                },
+            }
+        )
+    return rows
+
+
+def _mean_ic(group: pd.DataFrame, prediction_column: str) -> float | None:
+    if group[prediction_column].isna().all():
+        return None
+    rows = group.loc[:, ['symbol', 'open_time', 'realized']].assign(
+        prediction=group[prediction_column].to_numpy(dtype='float64')
+    )
+    coefficients = information_coefficient(rows.rename(columns={'realized': 'target_return'}))
+    finite = coefficients[np.isfinite(coefficients.to_numpy(dtype='float64'))]
+    return float(finite.mean()) if not finite.empty else None

@@ -20,16 +20,19 @@ from __future__ import annotations
 from prefect import serve
 from prefect.schedules import Cron
 
-from flows.feedback import feedback_volatility
+from flows.feedback import feedback_returns, feedback_volatility
 from flows.ingest import ingest_candles
-from flows.predict import predict_volatility
-from flows.train import train_volatility
+from flows.predict import predict_returns, predict_volatility
+from flows.train import train_returns, train_volatility
 
 TIMEZONE = 'UTC'
 SCHEDULES = {
     'horaire': (ingest_candles, '2 * * * *'),
     'horaire-prevision': (predict_volatility, '7 * * * *'),
+    'horaire-rendement': (predict_returns, '8 * * * *'),
     'horaire-retours': (feedback_volatility, '20 * * * *'),
+    'horaire-retours-rendement': (feedback_returns, '21 * * * *'),
+    'hebdomadaire-rendement': (train_returns, '0 3 * * 1'),
     'hebdomadaire': (train_volatility, '30 3 * * 1'),
 }
 TAGS = ['5mlde-project']
