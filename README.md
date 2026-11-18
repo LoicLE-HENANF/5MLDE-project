@@ -126,7 +126,7 @@ transversal par horodatage ; `training.metrics.icir` calcule l'ICIR d'une série
 
 `worker` et `api` tournent sur l'image du projet (`Dockerfile`) : le paquet y est installé en copie
 non éditable avec les dépendances de `uv.lock`, et sa version est calculée depuis Git au build.
-Seule une image construite sur un tag propre (`git tag v0.3.0` puis `docker compose build worker api`)
+Seule une image construite sur un tag propre (`git tag v0.1.0` puis `docker compose build worker api`)
 peut enregistrer des modèles au registre ; sinon l'entraînement est loggé dans MLflow mais non publié.
 
 | Déploiement Prefect | Planning (UTC) | Rôle |
