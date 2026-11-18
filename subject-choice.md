@@ -1,79 +1,85 @@
-# Choix du sujet — Signaux de trading crypto (horizon horaire)
+# Choix du sujet — Prévisions crypto et chaîne MLOps
 
-> Statut : **brouillon**. ✅ = décidé, 🟡 = proposition à valider.
+> Document de cadrage et de justification, mis en cohérence avec l'énoncé et l'implémentation du dépôt.
+> « En place » décrit une fonctionnalité présente dans le code ; « Limite » et « Suite possible » signalent
+> explicitement ce qui n'est pas encore implémenté.
 
 ## 1. Sujet
 
-Produire chaque heure, pour un panier de cryptomonnaies, deux prédictions servies par une API :
+Industrialiser une chaîne de prévision horaire pour un panier de cryptomonnaies : ingestion, contrôles qualité,
+entraînement, versionnement, service, feedback et supervision. Deux prédictions sont servies par l'API :
 
 1. **Rendement** à court terme (signal de direction et d'intensité) ;
 2. **Volatilité** réalisée à venir (niveau de risque).
 
-Inspiration : [Alpha Arena (nof1.ai)](https://www.nof1.ai/), qui compare des modèles sur du trading réel.
-Ici, **aucun ordre réel n'est passé** : les décisions sont simulées (*paper trading*) et évaluées a posteriori.
+Les ordres ne sont jamais transmis à une plateforme : les positions sont simulées (*paper trading*) et évaluées
+a posteriori. Cela illustre les décisions d'exploitation sans exposer de fonds réels.
 
-Conformément à l'énoncé, la performance prédictive n'est pas l'objectif. Les métriques servent à
-**décider la mise en service, la surveillance et le retour arrière** des modèles.
+Conformément à l'énoncé, la performance prédictive n'est pas un objectif à atteindre. Les métriques servent à
+illustrer la sélection, la mise en service, la surveillance et le retour arrière des modèles.
 
-### Pourquoi pas la seule précision de direction
+### Pourquoi ces métriques
 
-Sur un marché liquide, prédire « hausse / baisse » donne environ 50 % de bonnes réponses quel que soit le modèle.
-Cette précision ne distingue donc pas un bon modèle d'un mauvais. On évalue plutôt :
-- la **qualité du classement** des mouvements (IC) ;
-- le **résultat économique net de frais**, comparé à des références ;
-- pour la volatilité, l'**erreur face à une prévision naïve**, sur une cible bien plus prévisible.
+La précision de direction transforme un rendement continu en une classe et ignore son amplitude. Pour le
+rendement, l'IC de Spearman mesure plutôt si le modèle classe correctement les actifs les uns par rapport aux
+autres à une même heure ; il correspond au rôle du signal long/short. Le backtest net de frais vérifie ensuite
+si ce classement donne une stratégie simulée cohérente. Pour la volatilité, QLIKE mesure l'erreur d'une
+prévision de risque face à des références simples. Ces métriques sont des critères de décision opérationnels,
+pas une promesse de rentabilité.
 
 ## 2. Décisions
 
-| # | Décision | Statut |
+| # | Décision retenue | État dans le projet |
 |---|---|---|
-| D1 | Marché : **crypto, spot**, paires en USDT | ✅ |
-| D2 | Pas de temps : **bougies 1 h** | ✅ |
-| D3 | Deux cibles : **rendement + volatilité** | ✅ |
-| D4 | **Deux modèles séparés**, chacun entraîné sur tous les symboles (cf. §4) | 🟡 |
-| D5 | Univers : `BTCUSDT`, `ETHUSDT`, `SOLUSDT`, `BNBUSDT`, `XRPUSDT` | ✅ |
-| D6 | Historique : depuis 2022-01 (≈ 4 ans, ≈ 35 000 bougies par symbole) | ✅ (à revoir à l'ingestion) |
-| D10 | Stratégies simulées : **long/short transversal** (référence pour la promotion) + **long/cash** (réaliste en spot), modulées par la volatilité prédite (cf. §4 bis) | ✅ |
-| D11 | Application : **Streamlit** | ✅ (à revoir à l'implémentation) |
-| D7 | **Application de pilotage** : prédictions, marche/arrêt, configuration, modèles (cf. §6) | ✅ principe, 🟡 techno |
-| D9 | Horizon de la cible de rendement : **4 h** | ✅ |
-| D8 | Simulation uniquement, frais de 0,1 % par ordre (taker spot Binance) | 🟡 |
+| D1 | Marché **crypto spot**, paires cotées en USDT | En place |
+| D2 | Bougies horaires (`1h`) | En place |
+| D3 | Deux cibles : rendement et volatilité réalisée | En place |
+| D4 | Deux modèles multi-symboles, avec cycles de vie et métriques distincts | En place |
+| D5 | Univers : `BTCUSDT`, `ETHUSDT`, `SOLUSDT`, `BNBUSDT`, `XRPUSDT` | En place |
+| D6 | Historique à partir de janvier 2022 ; la période disponible dépend du dernier chargement | En place |
+| D7 | Application de pilotage pour le service, les prédictions et le registre | En place, sans configuration métier libre |
+| D8 | Simulation uniquement ; frais de 0,1 % appliqués au turnover du portefeuille | En place |
+| D9 | Horizon de la cible rendement : 4 h | En place |
+| D10 | Long/short et long/cash pour rendement ; ciblage de volatilité pour le portefeuille risque | En place |
+| D11 | Interface Streamlit cliente de l'API | En place |
 
 ## 3. Données
 
 ### Source
 
-**Binance Public Data**, via deux canaux. Les deux sont gratuits et ne demandent pas de clé d'API.
+Les bougies proviennent de Binance Spot, via deux canaux. Le client implémenté n'utilise pas de clé API.
 
 | Usage | Canal | Détail |
 |---|---|---|
-| Historique (ingestion initiale, réentraînements) | `https://data.binance.vision` | Archives mensuelles/journalières `data/spot/monthly/klines/<SYMBOLE>/1h/<SYMBOLE>-1h-<AAAA-MM>.zip`, chacune avec un fichier `.CHECKSUM` (SHA-256) |
-| Nouvelles bougies (fonctionnement horaire) | API REST `GET /api/v3/klines` | Dernières bougies clôturées |
+| Historique (chargement initial et mois absents) | `https://data.binance.vision` | Archives mensuelles `data/spot/monthly/klines/<SYMBOLE>/1h/<SYMBOLE>-1h-<AAAA-MM>.zip`, vérifiées avec `.CHECKSUM` (SHA-256) |
+| Bougies récentes | API REST Binance Spot `GET /api/v3/klines` | Reprise après la dernière bougie stockée |
 
 Format d'une bougie : `open_time, open, high, low, close, volume, close_time, quote_volume, count,
 taker_buy_base_volume, taker_buy_quote_volume, ignore` (CSV **sans en-tête**).
 
-### Provenance et conditions d'utilisation (à documenter dans le README)
+### Provenance et conditions d'utilisation
 
-- Les données sont publiées par Binance. Leur usage est soumis aux conditions d'utilisation de Binance,
-  qui seront citées et datées à la récupération.
-- **Le dépôt ne contient aucune donnée** : un script les télécharge, et les sommes SHA-256 assurent la reproductibilité.
-- L'accès à l'API Binance est restreint dans certains pays. Le projet est exécuté depuis la France.
+- Le dépôt ne contient pas les fichiers de données brutes : les archives Parquet locales sont sous `data/`,
+  chemin ignoré par Git. Les téléchargements sont vérifiés par checksum et l'identité des jeux de données
+  (période, symboles, nombre de lignes et SHA-256) est enregistrée dans MLflow.
+- Les sources et le lien vers les conditions d'utilisation Binance sont documentés dans le [README](README.md).
+  La date d'accès indiquée y est à distinguer d'une analyse juridique des conditions.
 
 ### Rejeu et temps réel
 
-Deux modes, sélectionnés par la configuration :
-- **rejeu** : l'historique est découpé en lots horaires et joué en accéléré (ce mode est déclaré comme tel, comme le permet l'énoncé) ;
-- **temps réel** : chaque heure, un flow récupère la bougie qui vient de se clôturer.
+Le flow `ingest-candles` charge les mois d'historique absents depuis les archives puis récupère les bougies
+récentes par l'API REST. Il est planifié toutes les heures. Il n'existe pas de mode de rejeu accéléré séparé :
+la validation et les backtests rejouent les données historiques sur les folds temporels et le test final.
 
-### Contrôles qualité (bloquants avant entraînement)
+### Contrôles qualité
 
-- Bougies manquantes ou dupliquées, horodatages non alignés sur l'heure.
-- Cohérence OHLC (`low ≤ open, close ≤ high`), prix strictement positifs, volumes ≥ 0.
-- **Unité des horodatages** : à vérifier sur les fichiers. Les archives spot récentes semblent être passées de la
-  milliseconde à la microseconde, un piège typique à détecter.
-- Checksum de l'archive différent de celui publié.
-- Valeurs aberrantes (rendement horaire extrême) : signalées, ou bloquantes au-delà d'un seuil.
+- Le schéma, les doublons, les heures non alignées, la cohérence OHLC et un volume acheteur supérieur au volume total
+  sont bloquants. Les prix sont strictement positifs et les volumes non négatifs selon le schéma.
+- Les horodatages sources en millisecondes ou microsecondes sont normalisés en UTC.
+- Un checksum d'archive différent, une variation absolue de log-rendement horaire supérieure à 50 % ou plus de 1 %
+  d'heures manquantes rejettent le lot.
+- Les bougies manquantes (jusqu'à 1 %) et les variations supérieures à 20 % et inférieures ou égales à 50 % sont
+  signalées sans bloquer le lot.
 
 #### Bougies interrompues (décision du 2026-11-18)
 
@@ -107,25 +113,30 @@ pas par l'ingestion tracée.
 Résultat du rechargement : mars 2023 accepté pour les cinq symboles avec 742 bougies (12:00 écartée, 13:00
 absente), les deux heures signalées comme anomalies non bloquantes.
 
-## 4. Combien de modèles ?
+## 4. Deux modèles, deux rôles
 
-**Proposition : 2 modèles**, chacun entraîné sur l'ensemble des 5 symboles.
+Les deux modèles sont des régressions scikit-learn entraînées sur le panel des cinq symboles. Ils partagent
+les features, mais leurs cibles, métriques, références et règles de promotion sont différentes. Ils sont
+entraînés chaque semaine par des flows distincts ; ce rythme est un choix opérationnel du projet, pas une
+affirmation qu'il est optimal pour les marchés.
 
-| | Modèle `rendement` | Modèle `volatilite` |
+| | `rendement` | `volatilite` |
 |---|---|---|
-| Cible | Rendement logarithmique sur les **4 h** suivantes (✅) | Volatilité réalisée sur les **24 h** suivantes (racine de la somme des carrés des rendements horaires) |
-| Type | Régression (le signe donne la direction) | Régression |
-| Métrique principale | IC (Spearman) moyen et sa stabilité (ICIR) | QLIKE ou MAE sur la log-volatilité |
-| Référence à battre | Signaux aléatoires, buy & hold, momentum naïf | Volatilité des dernières 24 h (persistance) |
-| Rythme naturel de réentraînement | Plus fréquent (signal instable) | Plus rare (cible stable) |
+| Cible | Rendement logarithmique des **4 h** suivantes | Volatilité réalisée des **24 h** suivantes : racine de la somme des carrés des rendements horaires |
+| Candidats | Ridge et HistGradientBoosting | Ridge et HistGradientBoosting |
+| Métrique de sélection walk-forward | Moyenne des IC de Spearman | QLIKE moyen |
+| Références | Rendement nul, momentum 1 h et momentum 4 h | Persistance 24 h, semaine précédente ramenée à 24 h, moyenne géométrique par symbole |
+| Stratégies de niveau 2 | Long/short et long/cash, net de frais | Portefeuille équipondéré dont l'exposition est ciblée par la volatilité prédite |
+| Déploiement d'entraînement | Chaque lundi à 03:00 UTC | Chaque lundi à 03:30 UTC |
 
-Le modèle de rendement indique où se positionner, et le modèle de volatilité combien engager ou quand
-s'abstenir. La stratégie simulée combine les deux.
+Le modèle `rendement` classe les symboles selon leur rendement attendu. Le modèle `volatilite` estime le
+risque futur et pilote séparément un portefeuille équipondéré à exposition réduite ou inchangée. Le code
+actuel n'assemble pas les deux prévisions dans une stratégie commune.
 
 ### Pourquoi deux modèles et pas un seul qui prédit tout
 
-- **Cycles de vie indépendants** : chaque modèle a ses versions, son alias de production et ses
-  règles de mise en service. Si le modèle de rendement se dégrade, on revient à sa version précédente sans toucher à la volatilité.
+- **Cycles de vie indépendants** : chaque modèle a ses propres versions, alias et règles de promotion.
+  Une dégradation du rendement ne modifie pas le registre de la volatilité, et inversement.
 - **Cibles, pertes et métriques différentes** : un modèle multi-sorties obligerait à un compromis entre les deux cibles et
   rendrait la règle de promotion ambiguë (meilleur sur l'une, pire sur l'autre).
 - C'est le schéma déjà utilisé au TP05 (deux tâches), réutilisable pour l'API, la traçabilité et Grafana.
@@ -137,12 +148,14 @@ s'abstenir. La stratégie simulée combine les deux.
 - On passe de 10 modèles à 2 à versionner et à superviser.
 - Le symbole peut rester une feature si les comportements diffèrent trop.
 
-### Algorithmes 🟡
+### Algorithmes
 
-Des modèles simples avec scikit-learn : **Ridge** comme référence linéaire et **HistGradientBoostingRegressor**
-comme candidat. La comparaison entre les deux illustre la règle de promotion.
+Les deux candidats sont **Ridge** (régression linéaire, avec standardisation) et
+**HistGradientBoostingRegressor**. Ils sont évalués sur les mêmes folds ; le meilleur est choisi selon la
+métrique propre à la cible. Les références naïves sont évaluées en parallèle, mais ne sont pas des candidats
+à l'enregistrement comme nouveau modèle.
 
-### Spécification initiale des features (V1)
+### Features utilisées
 
 Une ligne d'entraînement ou d'inférence représente un couple **(symbole, heure t)**. Les features
 sont calculées après la clôture de la bougie t, à partir de cette bougie et des précédentes. Les prix
@@ -151,12 +164,15 @@ bruts ne sont pas utilisés : les rendements et ratios rendent les entrées comp
 | Famille | Features V1 | Définition |
 |---|---|---|
 | Momentum | `return_1h`, `return_4h`, `return_12h`, `return_24h`, `return_72h`, `return_168h` | Rendement logarithmique `log(close[t] / close[t-h])` |
-| Volatilité réalisée | `realized_vol_6h`, `realized_vol_24h`, `realized_vol_72h`, `realized_vol_168h` | Racine de la somme des carrés des rendements horaires disponibles jusqu'à t, sur h heures |
+| Volatilité réalisée | `realized_vol_6h`, `realized_vol_24h`, `realized_vol_72h`, `realized_vol_168h` | Racine de la somme des carrés des rendements horaires des h dernières heures |
 | Forme de la bougie | `candle_range`, `candle_body`, `close_location` | Respectivement `log(high/low)`, `log(close/open)` et `(2*close-high-low)/(high-low)` ; `close_location` vaut 0 si `high == low` |
 | Activité | `quote_volume_ratio_24h`, `taker_buy_ratio`, `trade_count_ratio_24h` | Volume quote et nombre de transactions rapportés à leur médiane des 24 heures précédentes ; part du volume quote achetée par des takers |
 | Contexte transversal | `market_return_{1h,4h,24h}`, `relative_return_{1h,4h,24h}` | Médiane des rendements des cinq symboles à l'horizon h ; rendement du symbole moins cette médiane |
 | Temps | `hour_sin`, `hour_cos`, `weekday_sin`, `weekday_cos` | Encodage cyclique de l'heure et du jour de semaine UTC de la bougie t |
-| Identité | `symbol` | Symbole parmi les cinq de l'univers ; encodage explicite en colonnes indicatrices pour les modèles scikit-learn |
+| Identité | `symbol_BTCUSDT`, `symbol_ETHUSDT`, `symbol_SOLUSDT`, `symbol_BNBUSDT`, `symbol_XRPUSDT` | Symbole encodé en colonnes indicatrices |
+
+Le modèle reçoit 26 features numériques et 5 colonnes indicatrices de symbole. La colonne `symbol` et
+l'horodatage restent des identifiants ; ils ne sont pas transmis comme valeurs brutes au régresseur.
 
 Les rapports d'activité sont calculés avec la médiane des bougies **strictement antérieures à t** ; si
 elle est nulle, le ratio vaut 0. Le ratio acheteur est `taker_buy_quote_volume / quote_volume` ;
@@ -192,49 +208,43 @@ les indicateurs techniques redondants, les données externes et toute sélection
 sur la période de test finale. La même liste ordonnée de features devra être utilisée à l'entraînement
 et à l'inférence.
 
-## 4 bis. Stratégies ≠ modèles
+## 4 bis. Stratégies simulées
 
-Une **stratégie** est une règle de décision appliquée aux prédictions. Ce n'est pas un modèle.
-Toutes les stratégies lisent les mêmes prédictions et ne diffèrent que par la règle de position :
+Une stratégie transforme les prédictions en poids de portefeuille ; elle ne constitue pas un troisième
+modèle. Les backtests sont du *paper trading* et les frais sont calculés sur le turnover (y compris
+l'allocation initiale depuis le cash), au taux par défaut de 0,1 %.
 
-| Stratégie | Règle (chaque heure, sur les 5 symboles) | Rôle |
+| Stratégie | Règle implémentée | Usage |
 |---|---|---|
-| Long/short transversal | Achat du symbole au rendement prédit le plus haut, short du plus bas, montants égaux | Mesure la qualité du classement, indépendamment de la tendance du marché : **critère de promotion** |
-| Long/cash | Achat si le rendement prédit dépasse les frais aller-retour, sinon on reste en dollars | Stratégie réaliste en spot, affichée dans l'application |
-| Modulation par la volatilité | Taille de position inversement proportionnelle à la volatilité prédite ; abstention au-delà d'un seuil | Commune aux deux stratégies |
+| Long/short rendement | Les rangs transversaux des prédictions sont centrés ; poids nets nuls et exposition brute normalisée à 1. | Évaluer le classement indépendamment du mouvement général du marché. |
+| Long/cash rendement | Chaque symbole reçoit une part égale du capital si le rendement prédit dépasse le seuil de 0,1 %, sinon la position reste en cash. | Comparer un signal long seul, réaliste pour un univers spot. |
+| Tranches rendement | Chaque nouveau portefeuille est moyenné avec les trois dernières allocations horaires : quatre tranches pour tenir la cible de 4 h. | Réduire les réallocations et le turnover par rapport à une rotation complète chaque heure. |
+| Ciblage volatilité | Un portefeuille acheteur équipondéré est réduit selon `cible / volatilité prédite`, avec levier maximal égal à 1. | Comparer le contrôle de l'exposition au risque à un portefeuille brut et au ciblage par persistance. |
 
-Les stratégies sont du **code de backtest paramétré par la configuration**. On peut en ajouter une sans réentraîner aucun modèle.
-Entraîner un modèle par stratégie donnerait des modèles identiques, puisque la cible, les features et les données seraient les mêmes.
+Les poids sont décidés à la clôture de t et appliqués au rendement réalisé entre les clôtures de t et t+1 h.
+Les tranches font donc correspondre la tenue du portefeuille à l'horizon de prévision de 4 h sans attribuer
+à une décision l'information des bougies futures.
 
-### À quoi servent les stratégies
+Le ciblage de volatilité est évalué séparément : il ne module pas les poids des stratégies long/short ou
+long/cash du modèle rendement. Les backtests rendement comparent aussi le portefeuille équipondéré brut et
+les stratégies construites avec les momentum de 1 h et 4 h.
 
-Les stratégies n'influencent jamais l'entraînement : elles **lisent** les prédictions et les transforment en positions simulées.
-Elles **notent** bien les modèles, mais pas seules : le choix d'un modèle se fait en trois niveaux (cf. §5).
-Choisir uniquement sur le backtest reviendrait à sur-apprendre la période de test : avec assez de variantes
-(features, hyperparamètres, seuils), l'une finit toujours par avoir un bon PnL simulé par hasard. Le PnL dépend aussi
-des frais, du seuil d'abstention et de la taille des positions, et pas seulement de la qualité du modèle.
+Un rendement brut positif peut devenir négatif après frais : le classement doit compenser le coût du turnover,
+alors que le signal porte sur un rendement de seulement quatre heures. Les tranches réduisent ce coût, mais
+ne l'annulent pas. Ce résultat est informatif pour le projet ; le backtest ne constitue pas une promesse de
+rentabilité.
 
-Elles ont trois usages :
+Les stratégies servent à évaluer les candidats sur le test final, puis à mesurer le PnL *paper* à partir
+des retours observés. Les règles sont définies avant le test final et comparées à des références ; elles ne
+sont pas choisies en optimisant les résultats sur ce test.
 
-1. **Évaluer avant la mise en service (backtest).** Après l'entraînement, les prédictions de la nouvelle version
-   sont rejouées sur la période de test (données non vues), avec chaque stratégie. Les résultats sont enregistrés dans MLflow
-   (Sharpe, max drawdown, rendement net de frais). Le **long/short** sert de **critère de promotion** (niveau 2) : la version passe
-   en production seulement si elle n'est pas moins bonne que la version en production et fait mieux que les références (cf. §5).
-2. **Présenter dans l'application (paper trading).** En fonctionnement, chaque heure, les stratégies prennent des
-   positions *simulées* à partir des vraies prédictions de l'API. L'application affiche :
-   - les positions du moment (ex. « long SOL, short XRP ») ;
-   - la courbe de gain/perte cumulé de chaque stratégie depuis la mise en service. C'est le côté « Alpha Arena » de la démonstration.
-3. **Surveiller en production.** Quand le réalisé arrive 4 h plus tard (feedback), on calcule le gain réel de chaque position
-   simulée. Une perte persistante de la stratégie long/short signale une dégradation du modèle : alerte, voire retour
-   automatique à la version précédente, comme la règle sur l'IC glissant.
+Une action de promotion manuelle existe pour l'exploitation du registre et exige une raison tracée. Elle
+n'est pas utilisée pour désigner arbitrairement un champion de soutenance ni pour contourner un échec des
+critères automatiques. Si aucun candidat ne satisfait ces critères, il faut présenter ce résultat et ses
+limites, plutôt que sélectionner après coup une version défavorable.
 
-En résumé : on **entraîne** le modèle, on l'**évalue** avec les stratégies sur l'historique, puis on le **surveille** avec les stratégies en
-conditions réelles, et **l'application montre** le tout.
-
-**Modèle supplémentaire possible (optionnel)** : un classifieur `opportunite` qui estime la probabilité que le rendement
-à 4 h dépasse les frais aller-retour. Il répond directement à la question de la stratégie long/cash,
-et il apporte des métriques de calibration (Brier, courbe de fiabilité). On l'ajoutera seulement si le temps le permet, une fois les deux modèles principaux
-intégrés de bout en bout.
+Un classifieur optionnel `opportunite` (probabilité que le rendement 4 h dépasse un seuil) reste une piste
+future ; il n'est pas entraîné dans la version actuelle.
 
 ## 5. Évaluation et règles de mise en service
 
@@ -253,8 +263,8 @@ intégrés de bout en bout.
   d'entraînement ; en pratique, la séparation configurée vaut donc 4 h pour rendement et 24 h pour volatilité.
 - **Test final** : les trois derniers mois calendaires disponibles sont réservés au test final. Aucun fold de
   validation ne les chevauche ; les exemples de validation dont la cible atteindrait le début du test final
-  sont aussi exclus. Ils ne servent ni au choix des features, ni aux hyperparamètres, ni aux seuils.
-  Le test final est exécuté une seule fois par version candidate pour le backtest et la décision de promotion.
+  sont aussi exclus. Le test final n'intervient ni dans la sélection des modèles par walk-forward ni dans
+  le choix de features ou d'hyperparamètres. Il sert à évaluer le candidat retenu pour la décision de promotion.
 
 **Règle V1 de `holdout_split`** — le découpage final reprend les mêmes conventions temporelles :
 
@@ -271,7 +281,8 @@ intégrés de bout en bout.
 - Le splitter renvoie des indices positionnels. Il échoue explicitement si l'un des deux ensembles est vide.
 
 Les features sont calculées uniquement avec l'information disponible à l'instant t, pour éviter le *look-ahead*.
-- **Mêmes features à l'entraînement et à l'inférence** : un seul module de calcul, embarqué dans le modèle avec le code.
+- **Mêmes features à l'entraînement et à l'inférence** : un seul module de calcul est partagé ; la liste ordonnée de colonnes
+  attendue par le régresseur est identique dans les deux parcours.
 - **Bougie en cours ignorée** : seule une bougie clôturée sert de feature ; la bougie ouverte renvoyée par l'API REST est écartée.
 
 ### Trois niveaux d'évaluation
@@ -286,64 +297,101 @@ Les features sont calculées uniquement avec l'information disponible à l'insta
 - L'ICIR d'un fold vaut la moyenne des IC divisée par leur écart-type d'échantillon (`ddof=1`), sans
   annualisation. Il vaut `NaN` s'il reste moins de deux IC définis ou si leur écart-type est nul.
 
-| Niveau | Quand | Données | Métriques | Sert à |
+| Niveau | Quand | Données | Règle effective | Sert à |
 |---|---|---|---|---|
-| 1. Statistique | Pendant l'entraînement | Folds walk-forward | IC, ICIR (rendement) ; QLIKE (volatilité) | Choisir features et hyperparamètres |
-| 2. Stratégie | Après l'entraînement, une fois | Période de test finale | Sharpe net, drawdown, rotation, comparés au champion et aux références | Décider la promotion |
-| 3. Production | En continu | Nouvelles bougies réelles | IC glissant, PnL du paper trading | Surveiller, déclencher le retour arrière |
+| 1. Walk-forward | Entraînement | Folds temporels | Sélection du candidat selon IC moyen (rendement) ou QLIKE moyen (volatilité), comparé entre Ridge et HistGradientBoosting | Choisir le candidat |
+| 2. Holdout | Après la sélection | Trois derniers mois, exclus des folds | Comparaison aux références et aux stratégies naïves ; pour rendement, IC et Sharpe long/short ; pour volatilité, QLIKE et Sharpe du ciblage | Décider l'enregistrement comme `champion`, `challenger` ou rejet |
+| 3. Production | Quotidiennement | Feedbacks arrivés à échéance sur 7 jours | IC et PnL *paper* (rendement) ; QLIKE face à la persistance (volatilité) | Surveiller et, après 3 jours consécutifs dégradés, tenter le retour arrière |
 
-Le niveau 1 sélectionne, le niveau 2 valide, le niveau 3 confirme. Une version qui ne passe que le niveau 2 n'est pas promue.
+Le niveau 1 choisit le candidat, le niveau 2 applique la règle d'enregistrement et de promotion. Le niveau 3
+est un contrôle de production distinct : il déclenche le retour arrière automatique après trois jours
+consécutifs dégradés, mais n'est pas un critère d'attente avant la première promotion.
 
 ### Métriques suivies (MLflow)
 
-| Famille | Métriques |
+| Famille | Métriques journalisées |
 |---|---|
-| Signal | IC moyen, ICIR, précision de direction sur les 10 % de prédictions les plus confiantes |
-| Économique (backtest net de frais) | Rendement cumulé, Sharpe, max drawdown, profit factor, turnover, nombre de trades |
-| Références | Écart avec buy & hold et avec des signaux aléatoires (p-valeur empirique sur N tirages) |
-| Volatilité | QLIKE et MAE de la log-volatilité, gain relatif face à la persistance |
-| Robustesse | Métriques par fold et par régime de marché (haussier, baissier, latéral) |
+| Walk-forward | IC moyen et ICIR par prédicteur pour `rendement` ; QLIKE et MAE de log-volatilité pour `volatilite` |
+| Test final | Métriques des références, prédictions retenues et scores booléens indiquant si les seuils de comparaison sont satisfaits |
+| Stratégies | Rendement total, Sharpe, drawdown maximal, turnover, frais et nombre d'heures selon les stratégies et références |
+| Production | Santé quotidienne sur la fenêtre glissante de 7 jours, métrique de référence et PnL simulé |
 
-### Règles 🟡 (seuils à fixer après une première mesure)
+### Règles de promotion et de retour arrière en place
 
-- **Promotion** d'une nouvelle version du modèle `rendement`, si toutes les conditions sont remplies :
-  - niveau 1 : IC moyen > 0 sur la majorité des folds et supérieur à celui de la version en production ;
-  - niveau 2 : Sharpe net de frais du long/short supérieur à celui du buy & hold et pas inférieur à celui du champion ;
-  - niveau 2 : max drawdown pas pire de plus de X points.
-- **Promotion** d'une nouvelle version du modèle `volatilite` : QLIKE meilleur que la persistance **et** que la version en production.
-- **Challenger** : une version candidate peut d'abord recevoir l'alias `challenger`. Elle prédit en parallèle du `champion`
-  (prédictions tracées, sans positions réelles) pendant N jours ; elle est promue si son niveau 3 confirme le niveau 2.
-- **Retour arrière automatique** : si l'IC glissant mesuré en production reste sous 0 pendant N jours, **ou** si le gain/perte
-  glissant de la stratégie long/short simulée reste négatif sur la même fenêtre, l'alias de production revient à la version précédente et une alerte est envoyée.
-- **Retour arrière manuel** : une seule commande (ou un bouton de l'application) remet l'alias `champion` sur la version
-  précédente et l'enregistre dans `tracing.model_events`.
-- **Réentraînement** : planifié, et aussi déclenché par la **dérive** des features (PSI au-delà d'un seuil) ou par une baisse du niveau 3.
+- **Candidat rendement** : Ridge ou HistGradientBoosting est choisi selon l'IC moyen walk-forward. Au holdout,
+  il doit battre la meilleure référence naïve en IC, et son Sharpe long/short doit dépasser ceux du portefeuille
+  brut et des stratégies momentum 1 h et 4 h. Si un champion existe, le candidat doit aussi avoir un Sharpe
+  long/short au moins égal au sien sur le même holdout.
+- **Candidat volatilité** : le modèle est choisi selon le QLIKE moyen walk-forward. Au holdout, son QLIKE doit
+  être inférieur aux trois références et le Sharpe de sa stratégie de ciblage doit être au moins égal à celui
+  du ciblage fondé sur la persistance. La règle commune du registre empêche de remplacer un champion par un
+  candidat dont le QLIKE n'est pas meilleur sur le holdout.
+- **Issue** : un candidat qui échoue au niveau 1 n'est pas enregistré. S'il passe le niveau 1 mais échoue au
+  niveau 2, il est enregistré comme `challenger` ; s'il passe les deux niveaux mais ne bat pas le champion,
+  il reste également `challenger`. Sinon, il devient `champion` et l'ancien champion devient `precedent`.
+- **Challenger** : il prédit en parallèle sans produire de positions servies. La durée d'observation n'est pas
+  fixée et aucune promotion automatique au terme d'une période de challenger n'est implémentée ; une promotion
+  manuelle est possible, avec une raison obligatoire et une trace.
+- **Santé quotidienne** : fenêtre de 7 jours. `rendement` est dégradé si son IC moyen est négatif ou si son PnL
+  *paper* est négatif ; `volatilite` est dégradée si son QLIKE dépasse celui de la persistance.
+- **Retour arrière automatique** : après trois jours consécutifs de santé dégradée, le flow tente de remettre
+  l'alias `champion` sur `precedent`. Une alerte externe n'est pas envoyée par cette règle.
+- **Réentraînement** : planifié chaque semaine. La dérive PSI n'est pas implémentée et ne déclenche pas encore
+  d'entraînement automatique.
 
 ## 6. Retours, supervision et pilotage
 
-- **Feedbacks naturels** : une prédiction faite à t est confrontée au rendement et à la volatilité réalisés à
-  t + horizon, par un flow Prefect. Le système produit donc lui-même ses vérités terrain, sans saisie manuelle.
-- **Traces** : chaque prédiction est enregistrée avec la version du modèle, la durée de traitement, les erreurs et le feedback associé.
+- **Feedbacks** : les flows confrontent les prévisions aux rendements et volatilités réalisés dès que leur horizon
+  est clôturé. Les résultats alimentent les métriques et la santé ; aucune vérité terrain n'est saisie à la main.
+- **Traçabilité** : les prédictions, versions utilisées, résultats des flows, feedbacks et événements du registre
+  sont conservés en base et dans MLflow selon leur rôle.
 - **Inférence idempotente** : une seule prédiction par (symbole, bougie, version du modèle), garantie par une contrainte
   d'unicité ; relancer un flow ne crée pas de doublon.
-- **Application de pilotage** (D7) : interface utilisateur du système, qui sert aussi de support de démonstration.
+- **Application Streamlit** : interface de démonstration et d'exploitation, cliente de l'API.
 
   | Page | Contenu |
   |---|---|
-  | Prédictions | Dernières prédictions par symbole (rendement 4 h, volatilité 24 h), signal de la stratégie, réalisé vs prédit |
-  | Pilotage | **Marche / arrêt** du système, activation des alertes (push), paramètres modifiables (symboles actifs, seuils), historique des changements |
-  | Modèles | Versions du registre MLflow, alias de production, métriques, **promotion et retour arrière** |
-  | Supervision | Liens ou panneaux intégrés vers Grafana, état des services et des derniers runs Prefect |
+  | Projet | Présentation statique de la chaîne, accessible même si l'API est arrêtée |
+  | Service | Santé des dépendances, **marche / arrêt** des flows et historique des bascules |
+  | Prévisions | Dernière prévision par symbole, référence naïve et poids de position pour le modèle et l'alias choisis |
+  | Modèles | Alias `champion`, `challenger` et `precedent`, santé quotidienne, événements, **promotion manuelle** et retour arrière |
 
   Principes :
-  - L'application est un **client de l'API** : toute action passe par des endpoints validés et tracés
-    (qui, quand, ancienne et nouvelle valeur). Elle n'écrit jamais directement en base.
-  - **État et configuration en base** (`actif` / `inactif`, paramètres) : chaque flow les lit au démarrage et s'arrête
-    proprement si le système est inactif. Les schedules Prefect restent aussi pausables depuis l'UI Prefect.
-  - Grafana reste en lecture seule : il affiche l'état du système, l'application le modifie.
-  - Techno 🟡 : **Streamlit** (100 % Python, rapide à écrire) plutôt qu'un front web séparé.
+  - Toute action passe par l'API et les changements (opérateur, motif, date) sont tracés ; Streamlit n'écrit
+    pas directement en base.
+  - L'interrupteur persistant arrête les flows planifiés au démarrage ; ils terminent alors avec le statut
+    `cancelled`. Les déploiements peuvent aussi être gérés depuis Prefect.
+  - L'application ne propose pas de modification libre des paramètres métier ni d'envoi d'alertes.
+    Grafana est séparé et en lecture seule ; il expose quatre dashboards et six règles d'alerte dans son interface
+    (échec de flow, lot rejeté, données périmées, prévisions absentes, modèle dégradé, système arrêté).
+    Aucun canal externe de notification n'est configuré.
 
-## 6 bis. Dimensionnement de l'API
+### Architecture et responsabilités
+
+| Composant | Rôle dans le projet |
+|---|---|
+| Binance archives et API Spot | Fournir l'historique et les bougies récentes |
+| Prefect | Orchestrer ingestion, entraînements, prévisions et feedbacks selon des déploiements UTC |
+| Parquet local | Conserver les archives historiques téléchargées, sans les versionner dans Git |
+| PostgreSQL | Stocker les bougies récentes, les prédictions, les feedbacks, l'état opérationnel et les traces |
+| MLflow | Tracer les entraînements et gérer le registre ; son backend utilise PostgreSQL, pas SQLite |
+| FastAPI | Exposer les prévisions et les opérations du système à l'application |
+| Streamlit | Présenter les prévisions et permettre le pilotage via l'API |
+| Grafana | Lire les données de supervision et les présenter dans quatre dashboards |
+
+Les services sont assemblés avec Docker Compose. Le worker Prefect exécute les flows dans cet ordre horaire :
+
+| Déploiement | Horaire UTC | Rôle |
+|---|---|---|
+| Ingestion | `2 * * * *` | Récupérer les bougies closes |
+| Prévision volatilité | `7 * * * *` | Prévoir la volatilité 24 h |
+| Prévision rendement | `8 * * * *` | Prévoir le rendement 4 h |
+| Feedback volatilité | `20 * * * *` | Enregistrer les retours et la santé |
+| Feedback rendement | `21 * * * *` | Enregistrer les retours et la santé |
+| Entraînement rendement | `0 3 * * 1` | Réentraîner et appliquer les règles de registre |
+| Entraînement volatilité | `30 3 * * 1` | Réentraîner et appliquer les règles de registre |
+
+## 6 ter. Dimensionnement de l'API
 
 *Décision du 2026-11-18* (protocole et chiffres complets : README, section « Dimensionnement »).
 
@@ -356,18 +404,35 @@ Le niveau 1 sélectionne, le niveau 2 valide, le niveau 3 confirme. Une version 
 - **À réévaluer** si la cible change, ou sur une machine dédiée : la mesure partage les cœurs avec le client
   Locust, et le plafond observé (~300 req/s) semble venir du client ou du pool PostgreSQL plutôt que de l'API.
 
-## 7. Questions ouvertes
+## 7. Limites et suites possibles
 
-- [x] Horizon de la cible de rendement : **4 h**.
-- [x] Univers : les **5 symboles** proposés.
-- [x] Historique depuis 2022 (à confirmer à l'ingestion) ; taille des lots de rejeu à fixer.
-- [x] Stratégies : long/short transversal + long/cash, modulées par la volatilité. Le seuil d'abstention reste à fixer.
-- [x] Interrupteur : **application de pilotage** + état en base via l'API.
-- [x] Application : Streamlit (à revoir à l'implémentation).
-- [ ] 3e modèle `opportunite` (classifieur) : optionnel, à décider après l'intégration des deux premiers.
-- [x] Durée de la période de test finale : les trois derniers mois calendaires disponibles.
-- [ ] Durée de la phase `challenger`.
-- [ ] Seuil de dérive (PSI) déclenchant un réentraînement.
+Les éléments ci-dessous ne sont pas présentés comme des fonctions livrées :
 
-**Ordre de travail** : un circuit complet simple (ingestion → entraînement → inférence → retours → Grafana) avec le modèle
-`rendement` d'abord, puis le modèle `volatilite`, puis les raffinements. Un circuit complet vaut mieux que deux modèles sans production.
+- **Dérive PSI de bout en bout** : pas de calcul PSI en production ni de déclenchement de réentraînement sur dérive.
+- **Durée du challenger** : le challenger prédit en parallèle, mais aucune durée cible ni promotion automatique à
+  l'issue d'une période d'observation n'est définie.
+- **Classifieur `opportunite`** : troisième modèle optionnel, hors du périmètre implémenté.
+- **Notifications externes** : six règles d'alerte Grafana sont visibles dans l'interface, mais aucun canal externe
+  (courriel, Teams, webhook, etc.) n'est configuré.
+- **Charge** : les résultats sont une campagne sur une machine où le client Locust partage les ressources avec la
+  stack. Ils devront être reconfirmés sur l'infrastructure cible et après évolution de la charge.
+
+Ces suites ne remettent pas en cause le circuit livré : ingestion, contrôles qualité, entraînement walk-forward,
+registre MLflow, inférence API, feedback, supervision et pilotage sont déjà reliés.
+
+## 8. Points à démontrer et expliquer
+
+Pour la présentation, le projet peut être parcouru dans cet ordre :
+
+1. Montrer un cycle nominal d'ingestion puis un lot volontairement invalide dans un environnement de démonstration :
+   le lot doit être rejeté, tracé et visible dans Grafana. Expliquer aussi pourquoi la bougie du 2023-03-24 à
+   12:00 UTC est écartée sans rejeter tout le mois.
+2. Les deux entraînements comparent des candidats à des références sur des folds temporels, avec purge/embargo
+   et un test final séparé ; les métriques n'impliquent pas une promesse de rentabilité.
+3. Le registre conserve les versions et décisions ; le champion est servi, le challenger prédit en parallèle,
+   et les promotions/retours arrière sont tracés.
+4. Les retours alimentent la santé sur 7 jours ; trois jours dégradés consécutifs déclenchent une tentative de rollback.
+5. L'API et l'application montrent les prévisions et permettent le pilotage ; Grafana expose traitements, modèles,
+   service et charge.
+6. La campagne Locust documentée dans le README illustre la capacité mesurée et ses limites, sans la présenter
+   comme une garantie de performance en production.
