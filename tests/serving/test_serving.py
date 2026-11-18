@@ -8,9 +8,18 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from features import FEATURE_COLUMNS, target_volatility
+from features import FEATURE_COLUMNS, target_return, target_volatility
 from marketdata.sources import normalize
-from serving import health_rows, latest_features, pending_feedback, predict_latest, realized_feedback
+from serving import (
+    health_rows,
+    latest_features,
+    pending_feedback,
+    predict_latest,
+    predict_latest_returns,
+    realized_feedback,
+    realized_return_feedback,
+    return_health_rows,
+)
 from tests.conftest import raw_rows
 from training import qlike
 
@@ -101,6 +110,24 @@ def test_predict_latest_skips_positions_for_the_challenger():
     assert frame['position'].isna().all()
 
 
+def test_predict_latest_returns_signed_forecasts_and_long_short_positions():
+    candles = _candles()
+    latest = latest_features(candles, as_of=_as_of(candles))
+
+    forecast = predict_latest_returns(
+        lambda rows: np.array([-0.01, 0.02]),
+        candles,
+        as_of=_as_of(candles),
+    )
+
+    assert forecast.frame['prediction'].tolist() == [-0.01, 0.02]
+    assert forecast.frame['baseline'].tolist() == pytest.approx(
+        latest.loc[latest['open_time'] == forecast.open_time, 'return_4h'].tolist()
+    )
+    assert forecast.frame['position'].sum() == pytest.approx(0.0)
+    assert forecast.frame['position'].abs().sum() == pytest.approx(1.0)
+
+
 def test_predict_latest_serves_only_symbols_up_to_date():
     candles = _candles()
     late = (candles['symbol'] == 'ETHUSDT') & (candles['open_time'] == candles['open_time'].max())
@@ -166,6 +193,25 @@ def test_realized_feedback_matches_the_training_target():
     assert scored['realized'].tolist() == pytest.approx(expected.loc[list(SYMBOLS)].tolist())
     assert scored.loc[0, 'loss'] == pytest.approx(qlike([0.01], [scored.loc[0, 'realized']]))
     assert scored.loc[0, 'baseline_loss'] == pytest.approx(qlike([0.02], [scored.loc[0, 'realized']]))
+
+
+def test_realized_return_feedback_matches_the_training_target():
+    candles = _candles()
+    t0 = candles['open_time'].min() + pd.Timedelta(hours=100)
+    as_of = _as_of(candles)
+    rows = _predictions([t0])
+    for row in rows:
+        row.update(horizon_hours=4, prediction=0.01, baseline=-0.02)
+    pending = pending_feedback(rows, as_of)
+
+    scored = realized_return_feedback(pending, candles, as_of=as_of)
+
+    expected = target_return(candles, hours=4, as_of=as_of)
+    values = expected.loc[expected['open_time'] == t0].set_index('symbol')['target_return']
+    assert scored['prediction_id'].tolist() == [1, 2]
+    assert scored['realized'].tolist() == pytest.approx(values.loc[list(SYMBOLS)].tolist())
+    assert scored.loc[0, 'loss'] == pytest.approx((0.01 - scored.loc[0, 'realized']) ** 2)
+    assert scored.loc[0, 'baseline_loss'] == pytest.approx((-0.02 - scored.loc[0, 'realized']) ** 2)
 
 
 def test_realized_feedback_skips_predictions_with_a_gap_in_the_window():
@@ -245,3 +291,43 @@ def test_health_rows_ignores_predictions_outside_the_window():
     assert health_rows(scored.iloc[0:0], candles, day=date(2020, 1, 1)) == []
     with pytest.raises(ValueError):
         health_rows(scored, candles, day=date(2020, 1, 1), window_hours=0)
+
+
+def test_return_health_rows_uses_ic_and_flags_negative_signal():
+    candles = _candles()
+    times = candles['open_time'].drop_duplicates().tail(12).tolist()
+    symbols = ('BTCUSDT', 'ETHUSDT', 'SOLUSDT')
+    realized_values = (-0.01, 0.0, 0.01)
+    rows = []
+    for open_time in times:
+        for symbol, realized in zip(symbols, realized_values, strict=True):
+            rows.append(
+                {
+                    'model_name': 'rendement',
+                    'version': 2,
+                    'alias': 'champion',
+                    'mode': 'live',
+                    'symbol': symbol,
+                    'open_time': open_time,
+                    'prediction': realized,
+                    'baseline': -realized,
+                    'realized': realized,
+                    'position': np.nan,
+                }
+            )
+    scored = pd.DataFrame(rows)
+
+    healthy = return_health_rows(scored, candles, day=times[-1].date(), window_hours=72)[0]
+    degraded = return_health_rows(
+        scored.assign(prediction=-scored['realized']),
+        candles,
+        day=times[-1].date(),
+        window_hours=72,
+    )[0]
+
+    assert healthy['metric'] == 'ic_spearman'
+    assert healthy['value'] == pytest.approx(1.0)
+    assert healthy['baseline_value'] == pytest.approx(-1.0)
+    assert healthy['degraded'] is False
+    assert degraded['value'] == pytest.approx(-1.0)
+    assert degraded['degraded'] is True

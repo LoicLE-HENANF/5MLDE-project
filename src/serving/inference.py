@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from features import FEATURE_COLUMNS, build_features
-from strategies import scale_by_volatility, to_wide
+from strategies import long_short, scale_by_volatility, to_wide
 
 # Fenêtre (en heures) sur laquelle est mesurée la volatilité cible de la stratégie.
 TARGET_WINDOW_HOURS = 30 * 24
@@ -94,4 +94,34 @@ def predict_latest(
         positions = scale_by_volatility(raw, volatility, target=target)
         row = positions.loc[newest]
         frame['position'] = frame['symbol'].map(row).astype('float64')
+    return Forecast(frame=frame, as_of=stamp)
+
+
+def predict_latest_returns(
+    predict: Predictor,
+    candles: pd.DataFrame,
+    *,
+    as_of: datetime | pd.Timestamp | None = None,
+    with_positions: bool = True,
+) -> Forecast:
+    """Prédit le rendement futur à 4 h et construit les positions long/short."""
+    stamp = pd.Timestamp.now(tz='UTC') if as_of is None else pd.Timestamp(as_of)
+    if stamp.tzinfo is None:
+        raise ValueError('as_of doit inclure un fuseau horaire')
+    latest = latest_features(candles, as_of=stamp)
+    newest = latest['open_time'].max()
+    latest = latest.loc[latest['open_time'] == newest].reset_index(drop=True)
+
+    predicted = np.asarray(predict(latest.loc[:, list(FEATURE_COLUMNS)]), dtype='float64')
+    if predicted.shape != (len(latest),) or not np.isfinite(predicted).all():
+        raise ValueError('le modèle doit renvoyer un rendement fini par symbole')
+
+    frame = latest.loc[:, ['symbol', 'open_time']].copy()
+    frame['prediction'] = predicted
+    frame['baseline'] = latest['return_4h'].to_numpy(dtype='float64')
+    frame['position'] = np.nan
+    if with_positions:
+        keys = frame.loc[:, ['symbol', 'open_time']]
+        weights = long_short(keys.assign(prediction=predicted))
+        frame['position'] = frame['symbol'].map(weights.loc[newest]).astype('float64')
     return Forecast(frame=frame, as_of=stamp)
