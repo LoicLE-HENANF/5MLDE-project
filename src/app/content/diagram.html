@@ -1,0 +1,106 @@
+<!doctype html>
+<!-- Visionneuse d'un schéma Graphviz : rendu SVG dans le navigateur (viz.js local), zoom à la molette
+     centré sur le curseur, déplacement par glisser, double-clic pour recadrer, plein écran.
+     project.py remplace __DOT__ (chaîne JSON) et __HEIGHT__ (pixels). -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; font-family: "Source Sans Pro", sans-serif; }
+  #cadre { position: relative; height: __HEIGHT__px; border: 1px solid #e6e9ef; border-radius: 8px;
+           overflow: hidden; background: #fff; cursor: grab; }
+  #cadre:fullscreen { height: 100vh; border: none; border-radius: 0; }
+  #cadre.glisse { cursor: grabbing; }
+  #vue { transform-origin: 0 0; position: absolute; top: 0; left: 0; }
+  #outils { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 1; }
+  #outils button { width: 30px; height: 30px; border: 1px solid #d0d4dc; border-radius: 6px;
+                   background: #fff; cursor: pointer; font-size: 16px; line-height: 1; color: #31333f; }
+  #outils button:hover { background: #f0f2f6; }
+  #aide { position: absolute; bottom: 6px; left: 10px; font-size: 12px; color: #8b8f99; }
+  #erreur { padding: 16px; color: #b42318; font-size: 14px; }
+</style>
+</head>
+<body>
+<div id="cadre">
+  <div id="outils">
+    <button id="plus" title="Zoomer">+</button>
+    <button id="moins" title="Dézoomer">−</button>
+    <button id="ajuster" title="Recadrer">⤢</button>
+    <button id="plein" title="Plein écran">⛶</button>
+  </div>
+  <div id="vue"></div>
+  <div id="aide">Molette : zoom · glisser : déplacer · double-clic : recadrer</div>
+</div>
+<!-- viz.js 3.14.0 en local (src/app/static), servi par Streamlit : aucune connexion requise. -->
+<script src="/app/static/viz-standalone.js"></script>
+<script>
+  const DOT = __DOT__;
+  const cadre = document.getElementById('cadre');
+  const vue = document.getElementById('vue');
+  let echelle = 1, x = 0, y = 0, largeur = 0, hauteur = 0;
+
+  const appliquer = () => { vue.style.transform = `translate(${x}px, ${y}px) scale(${echelle})`; };
+
+  function ajuster() {
+    const marge = 20;
+    echelle = Math.min((cadre.clientWidth - 2 * marge) / largeur, (cadre.clientHeight - 2 * marge) / hauteur);
+    x = (cadre.clientWidth - largeur * echelle) / 2;
+    y = (cadre.clientHeight - hauteur * echelle) / 2;
+    appliquer();
+  }
+
+  // Zoom d'un facteur autour d'un point du cadre (le point reste fixe sous le curseur).
+  function zoomer(facteur, px = cadre.clientWidth / 2, py = cadre.clientHeight / 2) {
+    const cible = Math.min(Math.max(echelle * facteur, 0.05), 20);
+    x = px - (px - x) * (cible / echelle);
+    y = py - (py - y) * (cible / echelle);
+    echelle = cible;
+    appliquer();
+  }
+
+  cadre.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const r = cadre.getBoundingClientRect();
+    zoomer(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+
+  let depart = null;
+  cadre.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('#outils')) return;
+    depart = { px: e.clientX - x, py: e.clientY - y };
+    cadre.setPointerCapture(e.pointerId);
+    cadre.classList.add('glisse');
+  });
+  cadre.addEventListener('pointermove', (e) => {
+    if (!depart) return;
+    x = e.clientX - depart.px;
+    y = e.clientY - depart.py;
+    appliquer();
+  });
+  const lacher = () => { depart = null; cadre.classList.remove('glisse'); };
+  cadre.addEventListener('pointerup', lacher);
+  cadre.addEventListener('pointercancel', lacher);
+  cadre.addEventListener('dblclick', (e) => { if (!e.target.closest('#outils')) ajuster(); });
+
+  document.getElementById('plus').onclick = () => zoomer(1.25);
+  document.getElementById('moins').onclick = () => zoomer(0.8);
+  document.getElementById('ajuster').onclick = ajuster;
+  document.getElementById('plein').onclick = () =>
+    document.fullscreenElement ? document.exitFullscreen() : cadre.requestFullscreen();
+  document.addEventListener('fullscreenchange', () => requestAnimationFrame(ajuster));
+  window.addEventListener('resize', ajuster);
+
+  Viz.instance().then((viz) => {
+    const svg = viz.renderSVGElement(DOT);
+    largeur = svg.width.baseVal.value;
+    hauteur = svg.height.baseVal.value;
+    svg.setAttribute('width', largeur);
+    svg.setAttribute('height', hauteur);
+    vue.appendChild(svg);
+    ajuster();
+  }).catch((exc) => {
+    cadre.innerHTML = `<div id="erreur">Schéma indisponible (viz.js non chargé : lancer l'application avec python -m app) : ${exc}</div>`;
+  });
+</script>
+</body>
+</html>

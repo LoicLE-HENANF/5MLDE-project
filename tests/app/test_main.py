@@ -106,63 +106,78 @@ def fake(monkeypatch):
     return holder
 
 
-def _run(operator: str = '') -> AppTest:
+def _run(page_name: str = 'Projet', operator: str = '') -> AppTest:
     page = AppTest.from_file(PAGE, default_timeout=30)
     page.run()
+    page.sidebar.radio(key='page').set_value(page_name).run()
     if operator:
-        page.sidebar.text_input(key='operator').input(operator)
-        page.run()
+        page.sidebar.selectbox(key='operator').set_value(operator).run()
     return page
 
 
-def test_page_renders_all_tabs(fake):
+def test_sidebar_offers_demo_operators_then_navigation(fake):
     page = _run()
     assert not page.exception
-    assert [tab.label for tab in page.tabs] == ['Service', 'Prévisions', 'Modèles']
-    assert [m.value for m in page.metric][:2] == ['ok', 'ok']
-    assert len(page.dataframe) >= 3  # prévisions, santé, registre
-    assert any('en marche' in s.value for s in page.tabs[0].success)
+    operator = page.sidebar.selectbox(key='operator')
+    assert operator.options == ['admin', 'analyste', 'default']
+    assert operator.value == 'default'
+    labels = page.sidebar.radio(key='page').options  # libellés affichés : icône puis nom
+    assert [label.split(' ', 1)[1] for label in labels] == ['Projet', 'Service', 'Prévisions', 'Modèles']
+
+
+def test_every_page_renders(fake):
+    service = _run('Service')
+    assert not service.exception
+    assert [m.value for m in service.metric][:2] == ['ok', 'ok']
+    assert any('en marche' in s.value for s in service.success)
+    for name in ('Prévisions', 'Modèles'):
+        page = _run(name)
+        assert not page.exception
+        assert page.dataframe
 
 
 def test_unreachable_api_stops_with_hint(fake):
     fake['client'] = FakeClient(health_error=True)
-    page = _run()
+    page = _run('Service')
     assert not page.exception
     assert 'docker compose up' in page.error[0].value
-    assert not page.tabs
+    assert not _run('Projet').error  # la présentation reste visible
 
 
-def test_stop_requires_operator_and_reason(fake):
-    page = _run()
+def test_stop_requires_a_reason(fake):
+    page = _run('Service')
     page.toggle[0].set_value(False)
     page.button(key='FormSubmitter:system-Appliquer').click().run()
-    assert any("l'opérateur" in w.value for w in page.warning)
+    assert any('raison' in w.value for w in page.warning)
     assert fake['client'].calls == []
 
 
 def test_stop_calls_api_with_trace(fake):
-    page = _run('loic')
+    page = _run('Service', 'admin')
     page.toggle[0].set_value(False)
     page.text_input(key='system_reason').input('maintenance')
     page.button(key='FormSubmitter:system-Appliquer').click().run()
     assert fake['client'].calls == [
-        ('system', {'active': False, 'changed_by': 'loic', 'reason': 'maintenance'})
+        ('system', {'active': False, 'changed_by': 'admin', 'reason': 'maintenance'})
     ]
     assert any('Arrêt : fait' in s.value for s in page.success)
 
 
 def test_promotion_defaults_to_challenger(fake):
-    page = _run('loic')
+    page = _run('Modèles', 'analyste')
     page.text_input(key='promote_reason').input('meilleur QLIKE')
     page.button(key='FormSubmitter:promote-Promouvoir en champion').click().run()
     assert fake['client'].calls == [
-        ('promote', {'name': 'volatilite', 'version': 3, 'changed_by': 'loic', 'reason': 'meilleur QLIKE'})
+        (
+            'promote',
+            {'name': 'volatilite', 'version': 3, 'changed_by': 'analyste', 'reason': 'meilleur QLIKE'},
+        )
     ]
 
 
 def test_rollback_needs_confirmation_and_shows_refusal(fake):
     fake['client'] = FakeClient(refuse=True)
-    page = _run('loic')
+    page = _run('Modèles')
     submit = 'FormSubmitter:rollback-Revenir à la version précédente'
     page.button(key=submit).click().run()
     assert any('confirmation' in w.value for w in page.warning)

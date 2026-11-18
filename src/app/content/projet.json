@@ -1,0 +1,195 @@
+{
+  "titre": "Projet de 5MLDE",
+  "sous_titre": "Prévision du risque crypto, de la donnée brute au modèle servi",
+  "sujet": {
+    "intro": "Industrialiser la **prévision du risque** de 5 cryptomonnaies (BTCUSDT, ETHUSDT, SOLUSDT, BNBUSDT, XRPUSDT), à partir des bougies horaires Binance spot depuis janvier 2022.",
+    "modeles": [
+      {
+        "nom": "volatilite",
+        "cible": "Volatilité réalisée",
+        "horizon": "24 h",
+        "metrique": "QLIKE (plus bas = mieux)",
+        "usage": "Ciblage de volatilité : la taille des positions s'ajuste au risque prévu.",
+        "references": "Persistance 24 h, volatilité de la semaine, moyenne par symbole"
+      },
+      {
+        "nom": "rendement",
+        "cible": "Rendement",
+        "horizon": "4 h",
+        "metrique": "IC, corrélation de rang (plus haut = mieux)",
+        "usage": "Stratégie long/short : achat des symboles les mieux classés, vente des moins bien classés.",
+        "references": "Prédiction nulle, momentum"
+      }
+    ],
+    "conclusion": "Chaque modèle est comparé à des références naïves et n'est servi que s'il fait mieux. Toute la chaîne est tracée : données (empreinte SHA-256), code (version, archive), modèle (registre MLflow) et prévisions (PostgreSQL)."
+  },
+  "schemas": [
+    {
+      "id": "donnees", "hauteur": 700,
+      "direction": "TB",
+      "ligne": "parcours",
+      "titre": "Parcours des données",
+      "legende": "Cylindres : stockages. Pointillés : traces et retour arrière automatique.",
+      "noeuds": [
+        {"id": "binance", "label": "Binance\narchives mensuelles + API REST", "type": "externe"},
+        {"id": "ingest", "label": "ingest-candles\nCHECKSUM, contrôles qualité,\nbougies interrompues écartées"},
+        {"id": "parquet", "label": "Parquet\nhistorique depuis 2022-01", "type": "stockage"},
+        {"id": "candles", "label": "market.candles\nbougies récentes", "type": "stockage"},
+        {"id": "batches", "label": "tracing.ingestion_batches", "type": "stockage"},
+        {"id": "features", "label": "features\nrendements, volatilités,\ncontexte marché, calendrier"},
+        {"id": "train", "label": "train-volatility\nwalk-forward + test final"},
+        {"id": "mlflow", "label": "MLflow\nruns, artefacts, registre", "type": "stockage"},
+        {"id": "predict", "label": "predict-volatility\nchampion + challenger"},
+        {"id": "predictions", "label": "tracing.predictions", "type": "stockage"},
+        {"id": "feedback", "label": "feedback-volatility\nQLIKE à horizon clôturé"},
+        {"id": "health", "label": "tracing.feedback\ntracing.model_health", "type": "stockage"},
+        {"id": "api", "label": "API FastAPI"},
+        {"id": "grafana", "label": "Grafana"}
+      ],
+      "liens": [
+        {"de": "binance", "vers": "ingest"},
+        {"de": "ingest", "vers": "parquet"},
+        {"de": "ingest", "vers": "candles"},
+        {"de": "ingest", "vers": "batches", "label": "trace", "style": "pointille"},
+        {"de": "parquet", "vers": "features"},
+        {"de": "candles", "vers": "features"},
+        {"de": "features", "vers": "train"},
+        {"de": "train", "vers": "mlflow"},
+        {"de": "mlflow", "vers": "predict", "label": "alias"},
+        {"de": "features", "vers": "predict"},
+        {"de": "predict", "vers": "predictions"},
+        {"de": "predictions", "vers": "feedback"},
+        {"de": "candles", "vers": "feedback", "label": "réalisé"},
+        {"de": "feedback", "vers": "health"},
+        {"de": "feedback", "vers": "mlflow", "label": "retour arrière", "style": "pointille"},
+        {"de": "predictions", "vers": "api"},
+        {"de": "health", "vers": "api"},
+        {"de": "mlflow", "vers": "api"},
+        {"de": "predictions", "vers": "grafana"},
+        {"de": "health", "vers": "grafana"},
+        {"de": "batches", "vers": "grafana"}
+      ]
+    },
+    {
+      "id": "modeles", "hauteur": 700,
+      "direction": "TB",
+      "ligne": "parcours",
+      "titre": "Modèles et promotion",
+      "legende": "Pointillés : promotion manuelle et retour arrière automatique.",
+      "groupes": [
+        {"id": "volatilite", "label": "volatilite : volatilité réalisée 24 h (QLIKE)"},
+        {"id": "rendement", "label": "rendement : rendement 4 h (IC)"}
+      ],
+      "noeuds": [
+        {"id": "candidats", "label": "Candidats\nRidge, HistGradientBoosting", "groupe": "volatilite"},
+        {"id": "refs", "label": "Références naïves\npersistance, semaine, moyenne", "groupe": "volatilite"},
+        {"id": "folds", "label": "Folds walk-forward\nembargo + purge", "groupe": "volatilite"},
+        {"id": "choix", "label": "Meilleur QLIKE moyen\nréentraîné hors test final", "groupe": "volatilite"},
+        {"id": "test", "label": "Test final\n3 derniers mois, une seule fois", "groupe": "volatilite"},
+        {"id": "rendement", "label": "Ridge, HistGradientBoosting\nvs zéro et momentum, IC moyen", "groupe": "rendement"},
+        {"id": "regle", "label": "Règle de promotion\nniveau 1 : bat les références\nniveau 2 : stratégie bat la persistance\net bat le champion actuel", "type": "decision"},
+        {"id": "refuse", "label": "non enregistré"},
+        {"id": "challenger", "label": "alias challenger\nprédit en parallèle"},
+        {"id": "champion", "label": "alias champion\nposition servie", "type": "succes"},
+        {"id": "precedent", "label": "alias precedent\nancien champion"},
+        {"id": "sante", "label": "Santé quotidienne\nQLIKE glissante vs persistance"}
+      ],
+      "liens": [
+        {"de": "candidats", "vers": "folds"},
+        {"de": "refs", "vers": "folds"},
+        {"de": "folds", "vers": "choix"},
+        {"de": "choix", "vers": "test"},
+        {"de": "test", "vers": "regle"},
+        {"de": "rendement", "vers": "regle"},
+        {"de": "regle", "vers": "refuse", "label": "niveau 1 échoue"},
+        {"de": "regle", "vers": "challenger", "label": "niveau 2 échoue"},
+        {"de": "regle", "vers": "champion", "label": "tout passe"},
+        {"de": "challenger", "vers": "champion", "label": "promotion manuelle\n(raison tracée)", "style": "pointille"},
+        {"de": "champion", "vers": "precedent", "label": "remplacé"},
+        {"de": "champion", "vers": "sante"},
+        {"de": "sante", "vers": "precedent", "label": "3 jours dégradés :\nretour arrière", "style": "pointille"}
+      ]
+    },
+    {
+      "id": "infrastructure", "hauteur": 460,
+      "titre": "Infrastructure",
+      "legende": "docker compose, ports liés à 127.0.0.1. Grafana lit en lecture seule (grafana_reader), les flows et l'API écrivent avec api_writer. MLflow stocke ses métadonnées dans PostgreSQL (base mlflow, pas de SQLite) et ses artefacts sur un volume.",
+      "groupes": [
+        {"id": "compose", "label": "docker compose"}
+      ],
+      "noeuds": [
+        {"id": "user", "label": "Navigateur", "type": "externe"},
+        {"id": "binance", "label": "Binance", "type": "externe"},
+        {"id": "app", "label": "app\nStreamlit\n:8501", "groupe": "compose"},
+        {"id": "api", "label": "api\nFastAPI\n:8000", "groupe": "compose"},
+        {"id": "grafana", "label": "grafana\ndashboards, alertes\n:3000", "groupe": "compose"},
+        {"id": "worker", "label": "worker\nflows planifiés", "groupe": "compose"},
+        {"id": "prefect", "label": "prefect\norchestration\n:4200", "groupe": "compose"},
+        {"id": "mlflow", "label": "mlflow\nsuivi, registre\n:5000", "groupe": "compose"},
+        {"id": "postgres", "label": "postgres\nmlops · prefect · mlflow\n:5432", "groupe": "compose", "type": "stockage"},
+        {"id": "artefacts", "label": "volume mlflow_data\nartefacts", "groupe": "compose", "type": "stockage"},
+        {"id": "data", "label": "./data\nParquet", "groupe": "compose", "type": "stockage"}
+      ],
+      "liens": [
+        {"de": "user", "vers": "app"},
+        {"de": "user", "vers": "grafana"},
+        {"de": "user", "vers": "mlflow"},
+        {"de": "user", "vers": "prefect"},
+        {"de": "app", "vers": "api", "label": "HTTP"},
+        {"de": "api", "vers": "postgres", "label": "api_writer"},
+        {"de": "api", "vers": "mlflow"},
+        {"de": "worker", "vers": "prefect", "label": "déploiements"},
+        {"de": "worker", "vers": "mlflow"},
+        {"de": "worker", "vers": "postgres", "label": "api_writer"},
+        {"de": "worker", "vers": "data"},
+        {"de": "worker", "vers": "binance"},
+        {"de": "grafana", "vers": "postgres", "label": "grafana_reader\nlecture seule"},
+        {"de": "prefect", "vers": "postgres"},
+        {"de": "mlflow", "vers": "postgres"},
+        {"de": "mlflow", "vers": "artefacts"}
+      ]
+    }
+  ],
+  "tableaux": [
+    {
+      "id": "flows",
+      "titre": "Flows planifiés (UTC)",
+      "colonnes": ["Déploiement", "Cron", "Rôle"],
+      "lignes": [
+        ["ingest-candles/horaire", "2 * * * *", "Bougies de l'heure écoulée, archives mensuelles manquantes"],
+        ["predict-volatility/horaire-prevision", "7 * * * *", "Prévision 24 h du champion et du challenger"],
+        ["feedback-volatility/horaire-retours", "20 * * * *", "Retours à horizon clôturé, santé, retour arrière"],
+        ["train-volatility/hebdomadaire", "30 3 * * 1", "Réentraînement du lundi et règle de promotion"]
+      ]
+    },
+    {
+      "id": "services",
+      "titre": "Services",
+      "colonnes": ["Service", "Port", "Rôle"],
+      "lignes": [
+        ["postgres", "5432", "Bases mlops (market, tracing), prefect, mlflow"],
+        ["mlflow", "5000", "Expériences, registre de modèles, artefacts"],
+        ["prefect", "4200", "Orchestration : état des flows et des déploiements"],
+        ["worker", "—", "Exécute les déploiements planifiés (image du projet)"],
+        ["api", "8000", "FastAPI : santé, prévisions, registre, marche / arrêt"],
+        ["app", "8501", "Cette application (cliente de l'API uniquement)"],
+        ["grafana", "3000", "Dashboards et alertes (lecture seule)"]
+      ]
+    },
+    {
+      "id": "tables",
+      "titre": "Tables PostgreSQL (base mlops)",
+      "colonnes": ["Table", "Écrite par", "Contenu"],
+      "lignes": [
+        ["market.candles", "ingestion", "Bougies horaires récentes (fenêtre glissante, historique en Parquet)"],
+        ["tracing.ingestion_batches", "ingestion", "Un lot par symbole et période : accepté / rejeté, empreinte SHA-256"],
+        ["tracing.pipeline_runs", "tous les flows", "Un résumé par exécution de flow (statut, durée, détails)"],
+        ["tracing.model_events", "registre", "Enregistrements, promotions, retours arrière"],
+        ["tracing.predictions", "predict", "Prévisions servies (champion) et parallèles (challenger)"],
+        ["tracing.feedback", "feedback", "Valeur réalisée et perte QLIKE de chaque prévision"],
+        ["tracing.model_health", "feedback", "Santé quotidienne par version (niveau 3)"],
+        ["tracing.system_changes", "API", "Interrupteur marche / arrêt du système"]
+      ]
+    }
+  ]
+}

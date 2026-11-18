@@ -1,0 +1,22 @@
+/* Mise en forme de l'en-tête de l'application et de la section « Notre sujet » (onglet Projet). */
+.hero { text-align: center; padding: 0.5rem 0 1.25rem; }
+.hero h1 { font-size: 3rem; font-weight: 800; margin: 0; padding: 0;
+           background: linear-gradient(90deg, #4c6ef5, #12b886); -webkit-background-clip: text;
+           background-clip: text; color: transparent; }
+.hero p { margin: 0.35rem 0 0; font-size: 1.1rem; color: #6b7080; }
+
+.sujet h2 { margin: 0.5rem 0 0.5rem; }
+.sujet .intro { font-size: 1.05rem; margin-bottom: 1rem; }
+.cartes { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+.carte { border: 1px solid #e6e9ef; border-radius: 12px; padding: 1rem 1.25rem;
+         background: #fff; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06); border-top: 4px solid var(--accent); }
+.carte .nom { display: inline-block; font-family: monospace; font-size: 0.85rem; padding: 0.1rem 0.5rem;
+              border-radius: 999px; background: var(--fond); color: var(--accent); }
+.carte h3 { margin: 0.5rem 0 0.25rem; padding: 0; font-size: 1.35rem; }
+.carte .horizon { color: #6b7080; font-size: 0.95rem; }
+.carte dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 0.75rem; margin: 0.75rem 0 0; }
+.carte dt { color: #6b7080; font-size: 0.9rem; }
+.carte dd { margin: 0; font-size: 0.95rem; }
+.carte.c0 { --accent: #4c6ef5; --fond: #edf2ff; }
+.carte.c1 { --accent: #12b886; --fond: #e6fcf5; }
+.sujet .conclusion { margin-top: 1rem; color: #4a4f5c; }
