@@ -161,7 +161,10 @@ def predictions_page(client: api.ApiClient) -> None:
             'Prévision': percent,
             'Référence': percent,
             'Écart': percent,
-            'Position': st.column_config.ProgressColumn(format='percent', min_value=0.0, max_value=1.0),
+            # long/short (rendement) : poids négatifs = vente ; ciblage (volatilité) : 0 à 1
+            'Position': st.column_config.NumberColumn(
+                format='percent', help='Part du capital ; négatif = position vendeuse.'
+            ),
         },
     )
     st.bar_chart(

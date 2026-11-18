@@ -109,7 +109,8 @@ def score_pending(
     if len(scored):
         model = scored['loss'].astype('float64').mean()
         baseline = scored['baseline_loss'].astype('float64').mean()
-        label = 'MSE' if model_name == RETURN_MODEL_NAME else 'QLIKE'
+        # perte par prédiction ; la santé du rendement se juge sur l'IC (feedback_returns)
+        label = 'erreur quadratique' if model_name == RETURN_MODEL_NAME else 'QLIKE'
         log.info(
             '%d retours écrits : %s moyenne %.4f (référence %.4f) ; prédictions du %s au %s',
             len(scored),

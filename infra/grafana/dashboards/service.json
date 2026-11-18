@@ -584,7 +584,7 @@
       "id": 8,
       "type": "timeseries",
       "title": "Perte quotidienne des retours",
-      "description": "Perte moyenne par jour de prévision (QLIKE pour la volatilité ; plus bas = mieux).",
+      "description": "Perte moyenne par jour de prévision, plus bas = mieux (QLIKE pour la volatilité, erreur quadratique pour le rendement).",
       "datasource": {
         "uid": "projet-traces"
       },
@@ -663,7 +663,7 @@
       "id": 9,
       "type": "timeseries",
       "title": "Santé quotidienne (niveau 3)",
-      "description": "Métrique glissante par version comparée à la référence naïve.",
+      "description": "Métrique glissante par version comparée à la référence naïve : QLIKE pour la volatilité (plus bas = mieux), IC pour le rendement (plus haut = mieux).",
       "datasource": {
         "uid": "projet-traces"
       },

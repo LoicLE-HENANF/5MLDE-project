@@ -245,7 +245,7 @@
       "id": 3,
       "type": "barchart",
       "title": "Test final du dernier entraînement",
-      "description": "Métriques test_* du dernier run du modèle (période de test final exclue de la sélection). QLIKE et MAE : plus bas = mieux.",
+      "description": "Métriques test_* du dernier run du modèle (période de test final exclue de la sélection). Volatilité : QLIKE et MAE, plus bas = mieux. Rendement : IC, plus haut = mieux.",
       "datasource": {
         "uid": "projet-mlflow"
       },
