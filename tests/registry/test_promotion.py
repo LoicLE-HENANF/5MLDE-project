@@ -6,7 +6,7 @@ import mlflow
 import mlflow.pyfunc
 import pytest
 
-from registry import CHALLENGER, CHAMPION, PREVIOUS, RegistryError, decide, publish, rollback, status
+from registry import CHALLENGER, CHAMPION, PREVIOUS, RegistryError, decide, promote, publish, rollback, status
 from tests.connectors.test_mlflow import _Constant
 
 NAME = 'volatilite'
@@ -101,3 +101,51 @@ def test_rollback_without_previous_fails(local_connector, released):
     )
     with pytest.raises(RegistryError, match='precedent'):
         rollback(local_connector, NAME)
+
+
+# -- promotion manuelle ------------------------------------------------------------------------
+
+
+def _challenger_only(connector, record=None):
+    decision = decide(level1=True, level2=False, score=0.3, champion_score=None)
+    return publish(connector, _log(connector), NAME, decision, record=record)
+
+
+def test_manual_promotion_moves_challenger_to_champion(local_connector, released):
+    record = Recorder()
+    version = _challenger_only(local_connector, record)
+    promoted = promote(local_connector, NAME, version.version, reason='niveau 2 non concluant', record=record)
+    assert str(promoted.version) == str(version.version)
+    assert status(local_connector, NAME) == {CHAMPION: str(version.version), CHALLENGER: None, PREVIOUS: None}
+    last = record.events[-1]
+    assert (last['event'], last['alias']) == ('promoted', CHAMPION)
+    assert last['details'] == {'manuel': True, 'raison': 'niveau 2 non concluant'}
+
+
+def test_manual_promotion_keeps_previous_champion_for_rollback(local_connector, released):
+    first = _challenger_only(local_connector)
+    promote(local_connector, NAME, first.version, reason='r')
+    second = _challenger_only(local_connector)
+    promote(local_connector, NAME, second.version, reason='r')
+    assert status(local_connector, NAME) == {
+        CHAMPION: str(second.version),
+        CHALLENGER: None,
+        PREVIOUS: str(first.version),
+    }
+    assert str(rollback(local_connector, NAME).version) == str(first.version)
+
+
+@pytest.mark.parametrize('reason', ['', '   '])
+def test_manual_promotion_requires_a_reason(local_connector, released, reason):
+    version = _challenger_only(local_connector)
+    with pytest.raises(RegistryError, match='raison'):
+        promote(local_connector, NAME, version.version, reason=reason)
+
+
+def test_manual_promotion_rejects_unknown_or_current_champion(local_connector, released):
+    version = _challenger_only(local_connector)
+    with pytest.raises(RegistryError, match='introuvable'):
+        promote(local_connector, NAME, 99, reason='r')
+    promote(local_connector, NAME, version.version, reason='r')
+    with pytest.raises(RegistryError, match='déjà'):
+        promote(local_connector, NAME, version.version, reason='r')

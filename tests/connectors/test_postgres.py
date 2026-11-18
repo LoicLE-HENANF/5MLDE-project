@@ -16,12 +16,14 @@ from connectors.postgres import (
     BATCH_SOURCES,
     BATCH_STATUSES,
     MODEL_EVENTS,
+    PREDICTION_ALIASES,
+    PREDICTION_MODES,
     RUN_STATUSES,
     TABLES,
     PostgresConnector,
 )
 
-INIT_SQL = ROOT / 'infra' / 'postgres' / 'init' / '002-tracing.sql'
+INIT_DIR = ROOT / 'infra' / 'postgres' / 'init'
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
 
 
@@ -286,10 +288,9 @@ def test_connection_lost_during_write(config):
 
 # -- cohérence avec le schéma SQL --------------------------------------------------------------
 def _sql_columns(table: str) -> tuple[set[str], str]:
-    body = re.search(
-        rf'CREATE TABLE tracing\.{table} \((.*?)\n\);', INIT_SQL.read_text(encoding='utf-8'), re.S
-    )
-    assert body, f'table {table} absente de {INIT_SQL.name}'
+    scripts = '\n'.join(path.read_text(encoding='utf-8') for path in sorted(INIT_DIR.glob('*.sql')))
+    body = re.search(rf'CREATE TABLE tracing\.{table} \((.*?)\n\);', scripts, re.S)
+    assert body, f'table {table} absente de {INIT_DIR}'
     columns = {m.group(1) for m in re.finditer(r'^\s{4}([a-z][a-z0-9_]*)\s', body.group(1), re.M)}
     return columns - {'id', 'recorded_at'}, body.group(1)
 
@@ -307,3 +308,99 @@ def test_allowed_values_match_init_sql():
     assert all(f"'{e}'" in events for e in MODEL_EVENTS)
     _, batches = _sql_columns('ingestion_batches')
     assert all(f"'{s}'" in batches for s in BATCH_SOURCES + BATCH_STATUSES)
+    _, predictions = _sql_columns('predictions')
+    assert all(f"'{v}'" in predictions for v in PREDICTION_ALIASES + PREDICTION_MODES)
+    _, health = _sql_columns('model_health')
+    assert all(f"'{m}'" in health for m in PREDICTION_MODES)
+
+
+# -- service : prédictions, retours, santé -----------------------------------------------------
+NOW = datetime(2026, 11, 18, 12, tzinfo=UTC)
+
+
+def test_insert_idempotent_ignores_duplicates(config):
+    connector, fake = make(config, FakeConnection(rows=[None]))
+    row = {'prediction_id': 1, 'realized': 0.5}
+    assert connector.insert('feedback', row, idempotent=True) is None
+    query, _ = fake.conn.executed[0]
+    assert 'ON CONFLICT DO NOTHING RETURNING id' in query.as_string(None)
+
+
+def test_record_prediction(config):
+    connector, fake = make(config, FakeConnection(rows=[(5,)]))
+    assert (
+        connector.record_prediction(
+            model_name='volatilite',
+            version='3',
+            alias='champion',
+            symbol='BTCUSDT',
+            open_time=NOW,
+            horizon_hours=24,
+            prediction=0.01,
+            baseline=float('nan'),
+            position=0.2,
+            mode='live',
+        )
+        == 5
+    )
+    query, params = fake.conn.executed[0]
+    assert 'ON CONFLICT DO NOTHING' in query.as_string(None)
+    assert 3 in params and None in params  # version en entier, NaN -> NULL
+
+
+@pytest.mark.parametrize(
+    'kwargs',
+    [
+        {'alias': 'precedent'},
+        {'mode': 'backtest'},
+        {'alias': 'challenger', 'position': 0.1},
+        {'horizon_hours': 0},
+        {'prediction': float('inf')},
+    ],
+)
+def test_record_prediction_validation(config, kwargs):
+    connector, fake = make(config)
+    base = {
+        'model_name': 'volatilite',
+        'version': 1,
+        'alias': 'champion',
+        'symbol': 'BTCUSDT',
+        'open_time': NOW,
+        'horizon_hours': 24,
+        'prediction': 0.01,
+        'mode': 'live',
+    }
+    with pytest.raises(ValueError):
+        connector.record_prediction(**{**base, **kwargs})
+    assert fake.calls == []
+
+
+def test_record_feedback_and_health(config):
+    connector, fake = make(config, FakeConnection(rows=[(1,)]))
+    connector.record_feedback(prediction_id=7, realized=0.02, loss=0.1)
+    connector.record_model_health(
+        model_name='volatilite',
+        version=1,
+        mode='replay',
+        day=NOW.date(),
+        window_hours=168,
+        samples=10,
+        metric='qlike',
+        value=0.3,
+        baseline_value=0.4,
+        degraded=False,
+    )
+    assert len(fake.conn.executed) == 2
+    with pytest.raises(ValueError):
+        connector.record_feedback(prediction_id=7, realized=float('nan'))
+    with pytest.raises(ValueError):
+        connector.record_model_health(
+            model_name='m',
+            version=1,
+            mode='x',
+            day=NOW.date(),
+            window_hours=1,
+            samples=0,
+            metric='qlike',
+            degraded=False,
+        )

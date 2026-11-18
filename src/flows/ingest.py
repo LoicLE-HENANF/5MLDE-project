@@ -13,12 +13,14 @@ from __future__ import annotations
 import argparse
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from prefect import flow, task
 
 from connectors.config import PostgresConfig, load_env
 from connectors.postgres import PostgresConnector
 from connectors.prefect import get_logger, publish_markdown, run_context, task_options
+from flows.system import stopped
 from ingestion.download import BinanceClient
 from ingestion.pipeline import BatchProcessor, BatchResult, missing_months, recent_start
 from ingestion.store import CandleTable, ParquetStore, data_dir
@@ -75,7 +77,7 @@ def _report(results: Sequence[BatchResult]) -> str:
 
 
 @flow(name=FLOW_NAME, log_prints=True)
-def ingest_candles(symbols: list[str] | None = None, history: bool = True) -> dict[str, int]:
+def ingest_candles(symbols: list[str] | None = None, history: bool = True) -> dict[str, Any]:
     env = load_env()
     names = [check_symbol(s) for s in symbols or SYMBOLS]
     keep = retention(env)
@@ -84,6 +86,8 @@ def ingest_candles(symbols: list[str] | None = None, history: bool = True) -> di
     flow_run_id = run_context().get('flow_run_id')
     results: list[BatchResult] = []
     with PostgresConnector(PostgresConfig.from_env(env)) as db, BinanceClient() as client:
+        if (halted := stopped(db, FLOW_NAME, started, flow_run_id)) is not None:
+            return halted
         processor = BatchProcessor(
             client,
             record=db.record_ingestion_batch,
