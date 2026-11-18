@@ -10,11 +10,14 @@ Mini projet du module 5MLDE — énoncé : [subject.md](subject.md).
 
 ## Stack locale (Docker Compose)
 
+Copie le fichier d'environnement et adapte-le si nécessaire (ports, mots de passe, adresses), puis démarre la stack :
+
 ```powershell
-copy .env.example .env        # puis adapter si besoin (ports, mots de passe, adresses)
-docker compose up -d --build --wait   # démarre et attend que tous les services soient healthy
-docker compose down           # arrêt (ajouter -v pour repartir de volumes vides)
+copy .env.example .env
+docker compose up -d --build --wait
 ```
+
+Pour arrêter la stack, lance `docker compose down`. L'option `-v` supprime aussi les volumes et leurs données.
 
 | Service | URL (hôte) | Rôle |
 |---|---|---|
@@ -62,20 +65,22 @@ service injoignable ou qui refuse la connexion lève `ConnectorError` avec un co
 
 ```powershell
 uv sync
-uv run python -m connectors.health              # toutes les briques
+uv run python -m connectors.health
 uv run python -m connectors.health mlflow postgres
 ```
+
+La première commande vérifie toutes les briques ; la seconde limite le contrôle à MLflow et PostgreSQL.
 
 ### Traçabilité des modèles
 
 Chaque run et chaque modèle MLflow porte la provenance du code qui l'a produit (tags `code.*`) :
 version calculée depuis git (`0.2.0` = tag `v0.2.0`, `0.2.1.devN+g<sha>` = commit, suffixe
-`.d<date>` = arbre modifié), empreinte SHA-256 des paquets du projet (`connectors`, `features`, `flows`,
-`ingestion`, `lineage`, `marketdata`, `registry`, `strategies` et `training`) et des dépendances
-installées. Le code des paquets et la liste exacte des dépendances sont embarqués dans le modèle. Le run
-reçoit aussi `provenance/code.zip` (archive du code exécuté, mêmes fichiers que l'empreinte `code.sha256`)
-et `provenance/requirements.txt`, ainsi que les métriques système (`system/*` : CPU, mémoire, disque,
-réseau, échantillonnées toutes les 2 s).
+`.d<date>` = arbre modifié), empreinte SHA-256 des paquets du projet (`api`, `app`, `connectors`,
+`features`, `flows`, `ingestion`, `lineage`, `marketdata`, `registry`, `serving`, `strategies` et
+`training`) et des dépendances installées. Le code des paquets et la liste exacte des dépendances sont
+embarqués dans le modèle. Le run reçoit aussi `provenance/code.zip` (archive du code exécuté, mêmes
+fichiers que l'empreinte `code.sha256`) et `provenance/requirements.txt`, ainsi que les métriques
+système (`system/*` : CPU, mémoire, disque, réseau, échantillonnées toutes les 2 s).
 
 Le run d'entraînement `volatilite` joint aussi des graphiques dans `graphiques/` : courbe
 d'apprentissage de `hgb` (perte entraînement/validation et QLIKE par itération, dernier fold),
@@ -83,12 +88,13 @@ QLIKE par fold walk-forward, scores et QLIKE hebdomadaire sur le test final, vol
 réalisée par symbole, nuage prévu/réalisé, valeur du portefeuille de chaque stratégie et importance des
 features par permutation.
 
-`register_model` refuse un modèle dont le code n'est pas identifiable de façon fiable : arbre
-git modifié ou installation éditable. Pour produire un modèle publiable :
+`register_model` refuse un modèle dont le code n'est pas identifiable de façon fiable : arbre Git
+modifié ou installation éditable. Pour produire un modèle publiable, crée un tag propre puis lance
+l'entraînement depuis une installation non éditable :
 
 ```powershell
-git tag v0.2.0                                  # ou committer : version 0.2.1.devN+g<sha>
-uv run --no-editable python -m <votre_module>   # copie figée du code, version exacte
+git tag v0.2.0
+uv run --no-editable python -m <votre_module>
 ```
 
 ## Paquet `marketdata`
@@ -103,6 +109,13 @@ Définition des données : bougies horaires Binance spot pour `BTCUSDT`, `ETHUSD
 | `marketdata.schema` | Schéma pandera d'une bougie normalisée (types, unités, bornes) |
 | `marketdata.quality` | Règles qualité : bloquantes (schéma, doublons, alignement, OHLC, volumes, variation > 50 %) ou signalées (bougies manquantes jusqu'à 1 %, variation > 20 %) |
 | `marketdata.identity` | Identité d'un jeu de données : symboles, période, lignes, SHA-256 du contenu (tags `data.*`) |
+
+Les archives historiques sont téléchargées depuis [`data.binance.vision`](https://data.binance.vision/) et
+les bougies récentes depuis l'API REST Binance Spot (`/api/v3/klines`). Consulter les [conditions
+d'utilisation de Binance](https://www.binance.com/en/terms) (date d'accès à la référence : 2026-11-18) et
+vérifier leur version applicable avant toute redistribution. Ce projet ne redistribue pas les données.
+Les fichiers téléchargés sont conservés localement dans `data/`, ignoré par Git : aucune archive ni
+bougie brute n'est versionnée dans le dépôt.
 
 ## Paquet `features`
 
@@ -123,38 +136,97 @@ Les deux fonctions appliquent un embargo au moins égal à l'horizon et excluent
 si `target_column` est fourni. `training.metrics.information_coefficient` calcule l'IC de Spearman
 transversal par horodatage ; `training.metrics.icir` calcule l'ICIR d'une série d'IC.
 
+### Modèle `volatilite`
+
+`training.volatility.fit_volatility_model` compare Ridge et HistGradientBoosting à trois références :
+la persistance (volatilité des dernières 24 h), la volatilité de la semaine précédente ramenée à 24 h,
+et la moyenne géométrique de la volatilité cible par symbole, calculée sur l'entraînement. Le candidat
+retenu est celui dont le QLIKE moyen est le plus faible sur les folds walk-forward. Il est réentraîné
+hors test final, puis évalué une seule fois sur les trois derniers mois réservés.
+
+La promotion exige deux niveaux : (1) un QLIKE meilleur que celui de la meilleure référence sur le test
+final ; (2) un Sharpe au moins égal à celui de la stratégie de ciblage de volatilité pilotée par la
+persistance, frais inclus.
+
+### Modèle `rendement`
+
+`training.returns.fit_return_model` prédit le rendement logarithmique des quatre prochaines heures.
+Ridge et HistGradientBoosting sont comparés en walk-forward ; le candidat ayant le meilleur IC moyen
+sur les folds est réentraîné hors test final, puis évalué une seule fois sur les trois derniers mois.
+Les références sont le rendement nul et les momentum à 1 h et 4 h.
+
+L'IC est la corrélation de Spearman transversale entre prédictions et rendements réalisés, calculée par
+heure ; l'ICIR rapporte la moyenne des IC à leur écart-type d'échantillon (sans annualisation). La
+promotion vérifie deux niveaux : (1) l'IC du candidat sur le test final doit battre la meilleure
+référence dont l'IC est défini ; (2) son Sharpe long/short, net de frais, doit battre l'équipondéré brut
+et les références momentum long/short, et ne pas être inférieur à celui du champion existant.
+La stratégie long/cash est aussi évaluée et journalisée, mais ne constitue pas le critère de promotion.
+
+Pour entraîner et journaliser le modèle, puis éventuellement appliquer la règle de promotion :
+
+```powershell
+uv run python -m training.returns
+```
+
+Pour tenter la promotion au registre, lance l'entraînement depuis un tag propre et une installation
+non éditable :
+
+```powershell
+uv run --no-editable python -m training.returns --registre
+```
+
+La santé en production est mesurée sur une fenêtre glissante de sept jours : une version rendement est
+dégradée si son IC de Spearman est négatif ou si son PnL paper est négatif. Après trois jours consécutifs
+de santé dégradée, le flow tente de rétablir le champion précédent.
+
 ## Service en production
 
 `worker` et `api` tournent sur l'image du projet (`Dockerfile`) : le paquet y est installé en copie
 non éditable avec les dépendances de `uv.lock`, et sa version est calculée depuis Git au build.
-Seule une image construite sur un tag propre (`git tag v0.1.0` puis `docker compose build worker api`)
-peut enregistrer des modèles au registre ; sinon l'entraînement est loggé dans MLflow mais non publié.
+Seule une image construite depuis un tag propre (par exemple `git tag v0.2.0`, puis
+`docker compose build worker api`) peut enregistrer des modèles au registre ; sinon l'entraînement est
+loggé dans MLflow mais non publié.
 
 | Déploiement Prefect | Planning (UTC) | Rôle |
 |---|---|---|
 | `ingest-candles/horaire` | `2 * * * *` | Bougies de l'heure écoulée (API REST), archives mensuelles manquantes |
 | `predict-volatility/horaire-prevision` | `7 * * * *` | Prévision 24 h du `champion` (et du `challenger`), tracée dans `tracing.predictions` |
+| `predict-returns/horaire-rendement` | `8 * * * *` | Prévision rendement 4 h du `champion` (et du `challenger`) |
 | `feedback-volatility/horaire-retours` | `20 * * * *` | Retours à horizon clôturé, santé quotidienne, retour arrière automatique |
+| `feedback-returns/horaire-retours-rendement` | `21 * * * *` | Retours rendement, IC et PnL paper, retour arrière automatique |
+| `train-returns/hebdomadaire-rendement` | `0 3 * * 1` | Réentraînement rendement et règle de promotion |
 | `train-volatility/hebdomadaire` | `30 3 * * 1` | Réentraînement et règle de promotion (niveaux 1 et 2) |
 
 Un déploiement se lance aussi à la main (« Quick run » dans l'UI Prefect, ou
 `docker compose exec worker prefect deployment run predict-volatility/horaire-prevision`).
-Les mêmes flows tournent hors conteneur : `uv run python -m flows.predict`, `flows.feedback`, `flows.train`.
+Hors conteneur, les commandes par défaut ciblent `volatilite`. Passe `--model rendement` pour choisir le
+modèle de rendement :
+
+```powershell
+uv run python -m flows.predict --model rendement
+uv run python -m flows.feedback --model rendement
+uv run python -m flows.train --model rendement
+```
 
 Registre et service en ligne de commande :
 
 ```powershell
 uv run python -m registry statut volatilite
-uv run python -m registry promouvoir volatilite --version 2 --raison "..."   # promotion manuelle tracée
+uv run python -m registry promouvoir volatilite --version 2 --raison "..."
 uv run python -m registry retour-arriere volatilite
+uv run python -m registry statut rendement
+uv run python -m registry promouvoir rendement --version 2 --raison "..."
+uv run python -m registry retour-arriere rendement
 ```
+
+La promotion manuelle exige une raison et est tracée dans le registre.
 
 `POST /system/state` (ou l'interrupteur de l'application) arrête les flows planifiés : ils se
 terminent en `cancelled` dans `tracing.pipeline_runs`, sans rien écrire, jusqu'à la remise en marche.
 
 ## Supervision (Grafana)
 
-Trois dashboards, dossier « Projet 5MLDE » (http://localhost:3000), versionnés dans
+Quatre dashboards, dossier « Projet 5MLDE » (http://localhost:3000), versionnés dans
 `infra/grafana/dashboards/` et relus toutes les 30 s (le fichier fait foi, l'UI ne les modifie pas) :
 
 | Dashboard | Contenu |
@@ -162,6 +234,7 @@ Trois dashboards, dossier « Projet 5MLDE » (http://localhost:3000), versionné
 | Traitements | Flows Prefect (états, durées), lots d'ingestion et anomalies qualité, journal `tracing.pipeline_runs`, fraîcheur et prix des bougies |
 | Modèles | Alias et événements du registre, test final et stratégies simulées du dernier entraînement, historique des runs avec lien vers MLflow |
 | Service | Prévisions du `champion` et du `challenger` face à la référence naïve, positions, retours, santé quotidienne (niveau 3), marche / arrêt |
+| Charge | Résultats des campagnes Locust, SLO et dimensionnement de l'API |
 
 Les changements du registre et de l'interrupteur apparaissent en annotations sur les courbes.
 
@@ -204,9 +277,12 @@ Grafana reste en lecture seule : l'interrupteur vit ici, Grafana n'affiche que l
 Locust est dans un groupe de dépendances à part (`load`), absent de l'image.
 
 ```powershell
-uv run --group load python -m loadtest                  # campagne complète (~45 min), redémarre l'API
-uv run --group load python -m loadtest --configs 2x1    # une configuration (processus x cœurs)
+uv run --group load python -m loadtest
+uv run --group load python -m loadtest --configs 2x1
 ```
+
+La première commande lance la campagne complète (environ 45 minutes) et redémarre l'API. La seconde
+limite le test à une configuration (processus × cœurs).
 
 **Profils d'utilisateurs** (cible) : 200 bots de trading qui relisent `GET /predictions/latest` toutes les 1 à 3 s
 et arrivent en rafale au début de chaque heure ; 20 analystes (prévisions, fiche modèle, état) ; 2 opérateurs
@@ -249,10 +325,12 @@ n'est pas le goulot.
 
 ## Tests
 
+Par défaut, pytest exclut les tests d'intégration, qui nécessitent la stack Docker Compose :
+
 ```powershell
-uv run pytest                    # tests unitaires : services simulés, aucune stack nécessaire
+uv run pytest
 docker compose up -d --build --wait
-uv run pytest -m integration     # tests d'intégration contre la stack réelle
+uv run pytest -m integration
 ```
 
 Les tests d'intégration créent leurs objets (modèles, traces, dashboards, runs Prefect) avec un
