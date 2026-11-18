@@ -182,16 +182,20 @@ n'est branché pour l'instant.
 
 `src/app/` (http://localhost:8501, service `app` de `compose.yml`) est la console d'exploitation :
 elle passe uniquement par l'API (`API_URL`, défaut http://localhost:8000), ne lit aucune base et ne
-garde aucun état. Chaque action exige un opérateur (barre latérale) et une raison, toutes deux
-tracées par l'API.
+garde aucun état. La barre latérale porte l'opérateur puis la navigation. Les opérateurs sont des
+profils de démonstration (`admin`, `analyste`, `default`) sans contrôle d'accès : le nom choisi est
+tracé par l'API avec chaque action, accompagné d'une raison obligatoire.
 
-| Onglet | Contenu |
+| Page | Contenu |
 |---|---|
+| Projet | Sujet (une carte par modèle), schémas des données, des modèles et de l'infrastructure, tableaux de référence ; statique, s'affiche même API arrêtée |
 | Service | Santé des dépendances, interrupteur marche / arrêt (`POST /system/state`) et son historique |
 | Prévisions | Dernière prévision du `champion` ou du `challenger` par symbole, référence naïve, écart, position |
 | Modèles | Alias, santé quotidienne (niveau 3), événements du registre, promotion manuelle et retour arrière (avec confirmation) |
 
 Hors conteneur : `uv run python -m app` (options Streamlit en plus, ex. `--server.port 8502`).
+Les schémas sont rendus dans le navigateur par viz.js, copié dans `src/app/static/` et servi par
+Streamlit : aucune connexion internet n'est nécessaire.
 Grafana reste en lecture seule : l'interrupteur vit ici, Grafana n'affiche que les bascules.
 
 ## Tests
