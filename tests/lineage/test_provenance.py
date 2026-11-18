@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tomllib
+import zipfile
 from importlib.metadata import version as installed_version
 from pathlib import Path
 
@@ -49,6 +50,20 @@ def test_hash_tree_detects_content_and_name_changes(tmp_path, files):
     reference = _tree(tmp_path / 'ref' / 'pkg', {'x.py': '1', 'sub/y.py': '2'})
     changed = _tree(tmp_path / 'new' / 'pkg', files)
     assert provenance.hash_tree((reference,)) != provenance.hash_tree((changed,))
+
+
+def test_archive_tree_contains_exactly_the_hashed_files(tmp_path):
+    a = _tree(tmp_path / 'a' / 'pkg', {'x.py': '1', 'sub/y.py': '2', '__pycache__/x.cpython-312.pyc': '?'})
+    first = provenance.archive_tree((a,), tmp_path / 'first.zip')
+    with zipfile.ZipFile(first) as archive:
+        assert archive.namelist() == ['pkg/sub/y.py', 'pkg/x.py']
+        assert archive.read('pkg/sub/y.py') == b'2'
+        # l'archive extraite redonne la même empreinte que le tag code.sha256
+        archive.extractall(tmp_path / 'extracted')
+    assert provenance.hash_tree((tmp_path / 'extracted' / 'pkg',)) == provenance.hash_tree((a,))
+    # reproductible : mêmes sources, mêmes octets
+    second = provenance.archive_tree((a,), tmp_path / 'second.zip')
+    assert first.read_bytes() == second.read_bytes()
 
 
 def test_package_dirs_point_to_sources():

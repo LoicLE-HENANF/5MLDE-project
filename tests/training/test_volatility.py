@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import dataclasses
+import io
+from types import SimpleNamespace
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -9,9 +13,15 @@ import pytest
 from features import FEATURE_COLUMNS
 from marketdata.sources import normalize
 from tests.conftest import raw_rows
-from training import log_volatility_mae, prepare_volatility_dataset, qlike
+from training import figures, log_volatility_mae, prepare_volatility_dataset, qlike
 from training.dataset import VolatilityTrainingDataset
-from training.volatility import BASELINES, VolatilityPyfunc, cross_validate, fit_volatility_model
+from training.volatility import (
+    BASELINES,
+    VolatilityPyfunc,
+    cross_validate,
+    fit_volatility_model,
+    strategy_scores,
+)
 
 # -- métriques -----------------------------------------------------------------------------------
 
@@ -148,3 +158,96 @@ def test_served_model_returns_positive_volatility(synthetic):
     served = VolatilityPyfunc(result.model.estimator).predict(None, rows)
     np.testing.assert_allclose(served, result.model.predict(rows))
     assert (served > 0).all()
+
+
+def test_fit_scores_the_volatility_targeting_strategy(synthetic):
+    result = fit_volatility_model(synthetic)
+    assert set(result.strategy) == {'brut', 'persistance', result.candidate}
+    for metrics in result.strategy.values():
+        assert {'sharpe', 'max_drawdown', 'total_return', 'fees'} <= set(metrics)
+        assert all(np.isfinite(value) for value in metrics.values())
+    assert isinstance(result.beats_persistence_strategy(), bool)
+
+
+def test_strategy_scores_rewards_the_better_volatility_forecast():
+    """Rendements à volatilité alternée : la prévision exacte réduit la perte maximale."""
+    rng = np.random.default_rng(1)
+    times = pd.date_range('2025-01-01', periods=2000, freq='h', tz='UTC')
+    sigma = np.where(np.arange(len(times)) % 400 < 200, 0.002, 0.02)
+    holdout = pd.DataFrame({'symbol': 'BTCUSDT', 'open_time': times, 'return_1h': rng.normal(0, sigma)})
+    oracle = np.roll(sigma, -1)
+    flat = np.full(len(times), sigma.mean())
+    scores = strategy_scores(holdout, {'oracle': oracle, 'constante': flat}, target=0.002, fee=0.0)
+    assert scores['oracle']['max_drawdown'] > scores['constante']['max_drawdown']
+    assert scores['oracle']['max_drawdown'] > scores['brut']['max_drawdown']
+
+
+def test_promote_registers_first_champion_then_compares(synthetic, tmp_path, monkeypatch):
+    import mlflow
+
+    from connectors.config import MlflowConfig
+    from connectors.mlflow import MlflowConnector
+    from lineage import provenance
+    from registry import CHAMPION, status
+    from tests.connectors.test_mlflow import RELEASED
+    from training.volatility import MODEL_NAME, log_training, promote
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(provenance, 'current', lambda: RELEASED)
+    uri = f'sqlite:///{(tmp_path / "mlflow.db").as_posix()}'
+    connector = MlflowConnector(MlflowConfig(tracking_uri=uri, registry_uri=uri, experiment='e2e'))
+    identity = SimpleNamespace(tags=lambda: {'data.symbols': 'BTCUSDT,ETHUSDT'})
+    report = SimpleNamespace(summary=lambda: 'aucun problème')
+    try:
+        result = fit_volatility_model(
+            dataclasses.replace(synthetic, identity=identity, quality_report=report)
+        )
+        _, info = log_training(result, connector)
+        decision, version = promote(result, connector, info)
+        if result.beats_baselines() and result.beats_persistence_strategy():
+            assert decision.alias == CHAMPION
+            assert status(connector, MODEL_NAME)[CHAMPION] == str(version.version)
+            # même modèle relancé : ne bat pas strictement le champion -> challenger
+            _, info = log_training(result, connector)
+            again, _ = promote(result, connector, info)
+            assert again.alias != CHAMPION
+        else:
+            assert decision.alias != CHAMPION
+    finally:
+        mlflow.set_tracking_uri(None)
+        mlflow.set_registry_uri(None)
+
+
+# -- graphiques -------------------------------------------------------------------------------------
+
+
+def test_fit_keeps_the_data_behind_the_run_figures(synthetic):
+    result = fit_volatility_model(synthetic)
+    forecasts = result.forecasts
+    assert {'symbol', 'open_time', 'realise', *BASELINES, result.candidate} <= set(forecasts.columns)
+    assert (forecasts.drop(columns=['symbol', 'open_time']) > 0).all().all()
+    assert set(result.equity) == set(result.strategy)
+    curve = result.learning_curve
+    assert list(curve.columns) == ['iteration', 'train', 'validation', 'qlike_validation']
+    assert curve['train'].iloc[-1] < curve['train'].iloc[0]  # le boosting apprend
+    assert set(result.importance.index) == set(FEATURE_COLUMNS)
+
+
+def test_figures_render_and_skip_missing_data(synthetic):
+    result = fit_volatility_model(synthetic)
+    built = figures.build(result)
+    assert set(built) == {
+        'courbe_apprentissage',
+        'qlike_par_fold',
+        'test_final_scores',
+        'test_final_qlike_hebdo',
+        'test_final_prevision_vs_realise',
+        'test_final_dispersion',
+        'strategies_valeur_portefeuille',
+        'importance_features',
+    }
+    for figure in built.values():
+        figure.savefig(io.BytesIO(), format='png')
+    bare = dataclasses.replace(result, forecasts=None, equity={}, learning_curve=None, importance=None)
+    assert set(figures.build(bare)) == {'qlike_par_fold', 'test_final_scores'}
+    figures.close_all()

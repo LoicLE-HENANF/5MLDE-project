@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import time
+import zipfile
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -18,9 +20,10 @@ import pytest
 from mlflow.exceptions import MlflowException
 from mlflow.protos.databricks_pb2 import INTERNAL_ERROR, RESOURCE_DOES_NOT_EXIST
 
+from connectors import mlflow as mlflow_connector
 from connectors.config import MlflowConfig
 from connectors.errors import ConfigError, ConnectorError
-from connectors.mlflow import REQUIREMENTS_ARTIFACT, MlflowConnector
+from connectors.mlflow import CODE_ARCHIVE_ARTIFACT, REQUIREMENTS_ARTIFACT, MlflowConnector
 from lineage import provenance
 from lineage.errors import ProvenanceError
 from tests.conftest import refuse
@@ -172,9 +175,11 @@ def released(monkeypatch) -> provenance.CodeProvenance:
     return RELEASED
 
 
-def test_end_to_end_run_registry_alias_load(local_connector, released):
+def test_end_to_end_run_registry_alias_load(local_connector, released, monkeypatch):
+    monkeypatch.setattr(mlflow_connector, 'SYSTEM_METRICS_INTERVAL', 0.2)
     with local_connector.start_run('train', tags={'prefect.flow_run_id': 'fr-1', 'code.version': 'x'}) as run:
         mlflow.log_metric('rmse', 1.5)
+        time.sleep(1.0)  # laisse passer au moins un échantillon de métriques système
         info = local_connector.log_model(mlflow.pyfunc.log_model, python_model=_Constant())
 
     stored = local_connector.client.get_run(run.info.run_id)
@@ -185,6 +190,12 @@ def test_end_to_end_run_registry_alias_load(local_connector, released):
         assert stored.data.tags[key] == value
     requirements = mlflow.artifacts.load_text(f'runs:/{run.info.run_id}/{REQUIREMENTS_ARTIFACT}')
     assert requirements.split() == ['mlflow==3.16.1']
+    # l'archive du code exécuté est jointe au run
+    archive = Path(mlflow.artifacts.download_artifacts(f'runs:/{run.info.run_id}/{CODE_ARCHIVE_ARTIFACT}'))
+    with zipfile.ZipFile(archive) as code_zip:
+        assert 'lineage/provenance.py' in code_zip.namelist()
+    # métriques système enregistrées (au moins un échantillon à la fermeture du run)
+    assert any(key.startswith('system/') for key in stored.data.metrics)
 
     # le modèle embarque le code du paquet et les dépendances exactes
     model_dir = Path(mlflow.artifacts.download_artifacts(info.model_uri))

@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import zipfile
+from collections.abc import Iterator
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, distribution
 from pathlib import Path
@@ -28,7 +30,17 @@ from lineage.errors import ProvenanceError
 DISTRIBUTION = '5MLDE-project'
 # Paquets importables du projet, copiés dans chaque modèle (tenu aligné sur
 # [tool.hatch.build.targets.wheel].packages par tests/test_provenance.py).
-PACKAGES = ('connectors', 'features', 'flows', 'ingestion', 'lineage', 'marketdata', 'training')
+PACKAGES = (
+    'connectors',
+    'features',
+    'flows',
+    'ingestion',
+    'lineage',
+    'marketdata',
+    'registry',
+    'strategies',
+    'training',
+)
 
 TAG_PREFIX = 'code.'
 REQUIRED_TAGS = ('version', 'git_ref', 'sha256', 'dirty', 'editable')
@@ -89,18 +101,34 @@ def package_dirs(packages: tuple[str, ...] = PACKAGES) -> tuple[Path, ...]:
     return dirs
 
 
-def hash_tree(dirs: tuple[Path, ...]) -> str:
-    """SHA-256 du contenu des paquets (chemins relatifs + octets), hors bytecode."""
-    digest = hashlib.sha256()
+def _tree_files(dirs: tuple[Path, ...]) -> Iterator[tuple[str, Path]]:
+    """(chemin relatif, fichier) des paquets, triés, hors bytecode : base de l'empreinte et de l'archive."""
     for root in dirs:
         files = sorted(
             p for p in root.rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix != '.pyc'
         )
         for path in files:
-            digest.update(f'{root.name}/{path.relative_to(root).as_posix()}\0'.encode())
-            digest.update(path.read_bytes())
-            digest.update(b'\0')
+            yield f'{root.name}/{path.relative_to(root).as_posix()}', path
+
+
+def hash_tree(dirs: tuple[Path, ...]) -> str:
+    """SHA-256 du contenu des paquets (chemins relatifs + octets), hors bytecode."""
+    digest = hashlib.sha256()
+    for name, path in _tree_files(dirs):
+        digest.update(f'{name}\0'.encode())
+        digest.update(path.read_bytes())
+        digest.update(b'\0')
     return digest.hexdigest()
+
+
+def archive_tree(dirs: tuple[Path, ...], destination: Path) -> Path:
+    """Archive zip reproductible des paquets : exactement les fichiers couverts par `hash_tree`."""
+    with zipfile.ZipFile(destination, 'w') as archive:
+        for name, path in _tree_files(dirs):
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            archive.writestr(info, path.read_bytes())
+    return destination
 
 
 def _platform_marker(requirement: Requirement) -> str | None:
