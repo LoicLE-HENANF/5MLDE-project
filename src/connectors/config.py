@@ -20,7 +20,20 @@ from dotenv import dotenv_values
 
 from connectors.errors import ConfigError
 
-ROOT = Path(__file__).resolve().parents[2]
+
+def project_root(package_file: str | Path = __file__, cwd: Path | None = None) -> Path:
+    """Racine du projet : celle des sources (install éditable), sinon le dossier courant.
+
+    Avec `uv run --no-editable`, le paquet est copié dans `.venv` : remonter depuis le fichier
+    n'atteint plus le projet, on prend alors le dossier où la commande est lancée.
+    """
+    source_root = Path(package_file).resolve().parents[2]
+    if (source_root / 'pyproject.toml').is_file():
+        return source_root
+    return Path.cwd() if cwd is None else cwd
+
+
+ROOT = project_root()
 ENV_FILE = ROOT / '.env'
 
 

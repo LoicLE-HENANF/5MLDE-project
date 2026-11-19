@@ -126,6 +126,19 @@ def test_missing_dotenv_is_fine(tmp_path):
     assert isinstance(load_env(tmp_path / 'absent.env'), dict)
 
 
+def test_project_root_prefers_sources_then_cwd(tmp_path):
+    from connectors.config import project_root
+
+    sources = tmp_path / 'projet'
+    (sources / 'src' / 'connectors').mkdir(parents=True)
+    (sources / 'pyproject.toml').write_text('', encoding='utf-8')
+    installed = tmp_path / '.venv' / 'Lib' / 'site-packages' / 'connectors'
+    installed.mkdir(parents=True)
+
+    assert project_root(sources / 'src' / 'connectors' / 'config.py') == sources
+    assert project_root(installed / 'config.py', cwd=sources) == sources
+
+
 def test_env_example_is_complete():
     """.env.example fournit tout ce que chaque connecteur exige."""
     from dotenv import dotenv_values
