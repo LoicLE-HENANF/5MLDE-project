@@ -146,14 +146,6 @@
         "5mlde"
       ],
       "asDropdown": true
-    },
-    {
-      "title": "Rejeu 12 mois",
-      "type": "link",
-      "url": "/d/projet-service?var-mode=replay&from=now-13M&to=now",
-      "icon": "history",
-      "targetBlank": false,
-      "tooltip": "12 mois rejoués (python -m replay), traces marquées replay"
     }
   ],
   "panels": [

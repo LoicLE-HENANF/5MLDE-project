@@ -16,7 +16,7 @@ pytestmark = pytest.mark.integration
 
 INFRA = Path(__file__).resolve().parents[2] / 'infra' / 'grafana'
 # Ordre utile : `$modele` est remplacé avant `$mode`, qui en est un préfixe.
-VARIABLES = {'$modele': 'volatilite', '$mode': 'live', '$symbole': "'BTCUSDT'"}
+VARIABLES = {'$modele': 'volatilite', '$mode': 'live', '$registre': 'volatilite', '$symbole': "'BTCUSDT'"}
 
 
 def _queries() -> list[tuple[str, str, str, str]]:

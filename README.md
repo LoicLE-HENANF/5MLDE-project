@@ -310,9 +310,10 @@ uv run python -m replay --start 2025-11 --months 12 --models volatilite rendemen
   `*-replay` se suppriment à la main dans MLflow.
 - Dans le rejeu, un niveau 2 en échec n'empêche pas la promotion si le niveau 1 passe (démonstration du cycle
   de vie) ; la raison est tracée dans l'événement du registre. Le live garde la règle complète.
-- Grafana : dashboard Service, variable « Mode » = `replay` (lien « Rejeu 12 mois ») ; dashboard Modèles,
-  modèle `volatilite-replay` ou `rendement-replay`. Runs, annotations et événements sont placés à la date
-  simulée (`as_of`), pas à la date d'écriture.
+- Grafana : dashboards Service et Modèles, variable « Mode » (`live` / `replay`) ; on choisit le modèle
+  (`volatilite`, `rendement`), le mode pointe sur les traces et le registre correspondants (`<modèle>-replay`
+  en replay). Élargir la période (ex. 1 an) pour voir le rejeu. Runs, annotations et événements sont placés à
+  la date simulée (`as_of`), pas à la date d'écriture.
 
 ## Application de pilotage (Streamlit)
 
