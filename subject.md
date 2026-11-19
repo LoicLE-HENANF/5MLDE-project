@@ -54,12 +54,3 @@ Les critères d'évaluation sont les suivants :
 | Fiabilité et traçabilité | 20 % | Contrôles bloquants, gestion des incidents, suivi des exécutions et versions, retour arrière. |
 | Exploitation du service | 20 % | API fonctionnelle, persistance, feedbacks et supervision exploitable. |
 | Dimensionnement | 10 % | Pertinence du protocole de charge et justification des recommandations à partir des mesures. |
-
-
-
-à ajouter:
-specs par rapport aux users qu'on aura (par rapport au tests de charges)
-schemas données + infra (qui va ou, comment, quand etc)
-commandes pour scripts en + (pour tout demarrer + comportements de l'app)
-pas de sqllite pour mlflow (postgres instead)
-etre capable de TOUT expliqué (stack/code/process/data etc) => soutenance (pas projet)
