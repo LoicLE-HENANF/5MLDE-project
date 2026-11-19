@@ -8,6 +8,42 @@ Mini projet du module 5MLDE — énoncé : [subject.md](subject.md).
 - [uv](https://docs.astral.sh/uv/) — Python 3.12 est installé automatiquement
 - un clone git du dépôt : la version du paquet est calculée depuis les tags git
 
+## Démarrage rapide
+
+Tout démarrer, d'une machine vide à un système qui prédit seul :
+
+```powershell
+copy .env.example .env
+docker compose up -d --build --wait                                       # stack + migrations du schéma
+uv sync
+uv run python -m connectors.health                                        # toutes les briques répondent
+docker compose exec worker prefect deployment run ingest-candles/horaire  # historique Binance (archives)
+docker compose exec worker prefect deployment run train-volatility/hebdomadaire
+docker compose exec worker prefect deployment run train-returns/hebdomadaire-rendement
+uv run python -m registry statut volatilite                               # un champion existe ?
+uv run python -m registry statut rendement
+```
+
+Si l'entraînement ne passe pas la règle de promotion, il n'y a pas de champion : promouvoir la version
+à la main (`uv run python -m registry promouvoir <modele> --version N --raison "..."`, voir
+[Service en production](#service-en-production)). Seule une image construite depuis un tag propre publie
+au registre.
+
+Ce que le système fait ensuite tout seul (worker Prefect, plannings en UTC) :
+
+- chaque heure : ingestion des bougies (`:02`), prévisions `volatilite` (`:07`) et `rendement` (`:08`),
+  retours sur les horizons clôturés, santé quotidienne et retour arrière automatique (`:20`, `:21`) ;
+- chaque lundi : réentraînement des deux modèles et règle de promotion (03:00, 03:30) ;
+- sans champion, le flow de prévision se termine en `cancelled` avec la raison tracée, sans planter ;
+- l'interrupteur (page Service de l'application) arrête tous les flows planifiés jusqu'à la remise en
+  marche ; les bascules sont tracées et annotées dans Grafana ;
+- un lot de bougies invalide est rejeté (run en échec, alerte Grafana) ; une brique indisponible rend
+  l'API `/health` dégradée (503) et les flows reprennent au run suivant.
+
+Où regarder : application http://localhost:8501 (pilotage), Grafana http://localhost:3000 (supervision),
+Prefect http://localhost:4200 (runs), MLflow http://localhost:5000 (expériences et registre).
+Arrêt : `docker compose down` (les données restent dans les volumes).
+
 ## Stack locale (Docker Compose)
 
 Copie le fichier d'environnement et adapte-le si nécessaire (ports, mots de passe, adresses), puis démarre la stack :
