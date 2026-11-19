@@ -40,6 +40,7 @@ PACKAGES = (
     'lineage',
     'marketdata',
     'registry',
+    'replay',
     'serving',
     'strategies',
     'training',

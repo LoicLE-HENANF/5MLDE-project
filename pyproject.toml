@@ -56,6 +56,7 @@ packages = [
   "src/lineage",
   "src/marketdata",
   "src/registry",
+  "src/replay",
   "src/serving",
   "src/strategies",
   "src/training",
@@ -83,4 +84,4 @@ select = ["E", "W", "F", "I", "B", "UP", "BLE", "SIM", "RUF"]
 quote-style = "single"
 
 [tool.ruff.lint.isort]
-known-first-party = ["api", "app", "loadtest", "connectors", "features", "flows", "ingestion", "lineage", "marketdata", "registry", "serving", "strategies", "training"]
+known-first-party = ["api", "app", "loadtest", "connectors", "features", "flows", "ingestion", "lineage", "marketdata", "registry", "replay", "serving", "strategies", "training"]

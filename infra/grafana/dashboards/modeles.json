@@ -18,18 +18,60 @@
   "templating": {
     "list": [
       {
+        "name": "mode",
+        "label": "Mode",
+        "type": "custom",
+        "query": "live,replay",
+        "description": "live : service réel ; replay : 12 mois rejoués (python -m replay)",
+        "current": {
+          "text": "live",
+          "value": "live"
+        },
+        "options": [
+          {
+            "text": "live",
+            "value": "live",
+            "selected": true
+          },
+          {
+            "text": "replay",
+            "value": "replay",
+            "selected": false
+          }
+        ],
+        "multi": false,
+        "includeAll": false
+      },
+      {
         "name": "modele",
         "label": "Modèle",
         "type": "query",
         "datasource": {
           "uid": "projet-mlflow"
         },
-        "query": "SELECT name FROM registered_models ORDER BY name",
-        "definition": "SELECT name FROM registered_models ORDER BY name",
+        "query": "SELECT name FROM registered_models WHERE name NOT LIKE '%-replay' ORDER BY name",
+        "definition": "SELECT name FROM registered_models WHERE name NOT LIKE '%-replay' ORDER BY name",
         "refresh": 2,
         "multi": false,
         "includeAll": false,
         "sort": 1,
+        "current": {},
+        "options": []
+      },
+      {
+        "name": "registre",
+        "label": "Registre",
+        "type": "query",
+        "hide": 2,
+        "description": "Nom au registre MLflow : <modèle> en live, <modèle>-replay en replay",
+        "datasource": {
+          "uid": "projet-mlflow"
+        },
+        "query": "SELECT '$modele' || CASE WHEN '$mode' = 'replay' THEN '-replay' ELSE '' END",
+        "definition": "SELECT '$modele' || CASE WHEN '$mode' = 'replay' THEN '-replay' ELSE '' END",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
         "current": {},
         "options": []
       }
@@ -64,9 +106,9 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "table",
-          "rawSql": "SELECT recorded_at AS time, event || COALESCE(' ' || alias, '') || ' v' || version AS text, 'registre' AS tags FROM tracing.model_events WHERE model_name = '$modele' AND $__timeFilter(recorded_at)"
+          "rawSql": "SELECT event_time AS time, text, tags FROM (SELECT COALESCE((details->>'as_of')::timestamptz, recorded_at) AS event_time, event || COALESCE(' ' || alias, '') || ' v' || version AS text, 'registre' AS tags FROM tracing.model_events WHERE model_name = '$registre') e WHERE $__timeFilter(event_time)"
         },
-        "rawQuery": "SELECT recorded_at AS time, event || COALESCE(' ' || alias, '') || ' v' || version AS text, 'registre' AS tags FROM tracing.model_events WHERE model_name = '$modele' AND $__timeFilter(recorded_at)"
+        "rawQuery": "SELECT event_time AS time, text, tags FROM (SELECT COALESCE((details->>'as_of')::timestamptz, recorded_at) AS event_time, event || COALESCE(' ' || alias, '') || ' v' || version AS text, 'registre' AS tags FROM tracing.model_events WHERE model_name = '$registre') e WHERE $__timeFilter(event_time)"
       }
     ]
   },
@@ -104,7 +146,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "table",
-          "rawSql": "SELECT a.alias, a.version, to_timestamp(v.creation_time / 1000.0) AS \"enregistrée\", (SELECT t.value FROM model_version_tags t WHERE t.name = v.name AND t.version = v.version AND t.key = 'code.version') AS \"code\", v.run_id FROM registered_model_aliases a JOIN model_versions v ON v.name = a.name AND v.version = a.version WHERE a.name = '$modele' ORDER BY a.alias"
+          "rawSql": "SELECT a.alias, a.version, to_timestamp(v.creation_time / 1000.0) AS \"enregistrée\", (SELECT t.value FROM model_version_tags t WHERE t.name = v.name AND t.version = v.version AND t.key = 'code.version') AS \"code\", v.run_id FROM registered_model_aliases a JOIN model_versions v ON v.name = a.name AND v.version = a.version WHERE a.name = '$registre' ORDER BY a.alias"
         }
       ],
       "fieldConfig": {
@@ -184,7 +226,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "table",
-          "rawSql": "SELECT recorded_at AS \"date\", event AS \"événement\", alias, version, details::text AS \"détails\" FROM tracing.model_events WHERE model_name = '$modele' ORDER BY id DESC LIMIT 50"
+          "rawSql": "SELECT recorded_at AS \"date\", event AS \"événement\", alias, version, details::text AS \"détails\" FROM tracing.model_events WHERE model_name = '$registre' ORDER BY id DESC LIMIT 50"
         }
       ],
       "fieldConfig": {
@@ -264,7 +306,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "table",
-          "rawSql": "SELECT substr(key, 6) AS \"mesure\", value FROM latest_metrics WHERE run_uuid = (SELECT r.run_uuid FROM runs r WHERE r.status = 'FINISHED' AND r.lifecycle_stage = 'active' AND EXISTS (SELECT 1 FROM tags m WHERE m.run_uuid = r.run_uuid AND m.key = 'modele' AND m.value = '$modele') ORDER BY r.start_time DESC LIMIT 1) AND key LIKE 'test\\_%' AND key NOT LIKE 'test\\_bat\\_%' ORDER BY key"
+          "rawSql": "SELECT substr(key, 6) AS \"mesure\", value FROM latest_metrics WHERE run_uuid = (SELECT r.run_uuid FROM runs r WHERE r.status = 'FINISHED' AND r.lifecycle_stage = 'active' AND EXISTS (SELECT 1 FROM tags m WHERE m.run_uuid = r.run_uuid AND m.key = 'modele' AND m.value = '$registre') ORDER BY r.start_time DESC LIMIT 1) AND key LIKE 'test\\_%' AND key NOT LIKE 'test\\_bat\\_%' ORDER BY key"
         }
       ],
       "fieldConfig": {
@@ -309,7 +351,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "table",
-          "rawSql": "SELECT substring(key FROM '^strategie_(?:sharpe|total_return|max_drawdown)_(.*)$') AS \"stratégie\", max(value) FILTER (WHERE key LIKE 'strategie\\_sharpe\\_%') AS \"Sharpe\", max(value) FILTER (WHERE key LIKE 'strategie\\_total\\_return\\_%') AS \"rendement total\", max(value) FILTER (WHERE key LIKE 'strategie\\_max\\_drawdown\\_%') AS \"perte max\" FROM latest_metrics WHERE run_uuid = (SELECT r.run_uuid FROM runs r WHERE r.status = 'FINISHED' AND r.lifecycle_stage = 'active' AND EXISTS (SELECT 1 FROM tags m WHERE m.run_uuid = r.run_uuid AND m.key = 'modele' AND m.value = '$modele') ORDER BY r.start_time DESC LIMIT 1) AND key ~ '^strategie_(sharpe|total_return|max_drawdown)_' GROUP BY 1 ORDER BY 2 DESC"
+          "rawSql": "SELECT substring(key FROM '^strategie_(?:sharpe|total_return|max_drawdown)_(.*)$') AS \"stratégie\", max(value) FILTER (WHERE key LIKE 'strategie\\_sharpe\\_%') AS \"Sharpe\", max(value) FILTER (WHERE key LIKE 'strategie\\_total\\_return\\_%') AS \"rendement total\", max(value) FILTER (WHERE key LIKE 'strategie\\_max\\_drawdown\\_%') AS \"perte max\" FROM latest_metrics WHERE run_uuid = (SELECT r.run_uuid FROM runs r WHERE r.status = 'FINISHED' AND r.lifecycle_stage = 'active' AND EXISTS (SELECT 1 FROM tags m WHERE m.run_uuid = r.run_uuid AND m.key = 'modele' AND m.value = '$registre') ORDER BY r.start_time DESC LIMIT 1) AND key ~ '^strategie_(sharpe|total_return|max_drawdown)_' GROUP BY 1 ORDER BY 2 DESC"
         }
       ],
       "fieldConfig": {
@@ -402,7 +444,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "time_series",
-          "rawSql": "SELECT to_timestamp(r.start_time / 1000.0) AS time, substr(m.key, 6) AS metric, m.value FROM runs r JOIN latest_metrics m ON m.run_uuid = r.run_uuid WHERE r.status = 'FINISHED' AND r.lifecycle_stage = 'active' AND EXISTS (SELECT 1 FROM tags m WHERE m.run_uuid = r.run_uuid AND m.key = 'modele' AND m.value = '$modele') AND m.key LIKE 'test\\_%' AND m.key NOT LIKE 'test\\_bat\\_%' AND $__unixEpochFilter(r.start_time / 1000) ORDER BY 1"
+          "rawSql": "SELECT run_time AS time, metric, value FROM (SELECT COALESCE((SELECT a.value FROM tags a WHERE a.run_uuid = r.run_uuid AND a.key = 'as_of')::timestamptz, to_timestamp(r.start_time / 1000.0)) AS run_time, substr(m.key, 6) AS metric, m.value FROM runs r JOIN latest_metrics m ON m.run_uuid = r.run_uuid WHERE r.status = 'FINISHED' AND r.lifecycle_stage = 'active' AND EXISTS (SELECT 1 FROM tags m WHERE m.run_uuid = r.run_uuid AND m.key = 'modele' AND m.value = '$registre') AND m.key LIKE 'test\\_%' AND m.key NOT LIKE 'test\\_bat\\_%') q WHERE $__timeFilter(run_time) ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -462,7 +504,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "table",
-          "rawSql": "SELECT to_timestamp(r.start_time / 1000.0) AS \"début\", r.name AS run, r.status AS \"statut\", round((r.end_time - r.start_time) / 1000.0, 1) AS \"durée (s)\", max(t.value) FILTER (WHERE t.key = 'candidat') AS candidat, max(t.value) FILTER (WHERE t.key = 'code.version') AS code, max(t.value) FILTER (WHERE t.key = 'code.dirty') AS \"code modifié\", left(max(t.value) FILTER (WHERE t.key = 'data.sha256'), 12) AS \"données\", r.experiment_id AS \"expérience\", r.run_uuid AS run_id FROM runs r LEFT JOIN tags t ON t.run_uuid = r.run_uuid WHERE r.lifecycle_stage = 'active' AND EXISTS (SELECT 1 FROM tags m WHERE m.run_uuid = r.run_uuid AND m.key = 'modele' AND m.value = '$modele') AND $__unixEpochFilter(r.start_time / 1000) GROUP BY r.run_uuid ORDER BY r.start_time DESC LIMIT 50"
+          "rawSql": "SELECT to_timestamp(r.start_time / 1000.0) AS \"début\", r.name AS run, max(t.value) FILTER (WHERE t.key = 'as_of') AS \"date simulée\", r.status AS \"statut\", round((r.end_time - r.start_time) / 1000.0, 1) AS \"durée (s)\", max(t.value) FILTER (WHERE t.key = 'candidat') AS candidat, max(t.value) FILTER (WHERE t.key = 'code.version') AS code, max(t.value) FILTER (WHERE t.key = 'code.dirty') AS \"code modifié\", left(max(t.value) FILTER (WHERE t.key = 'data.sha256'), 12) AS \"données\", r.experiment_id AS \"expérience\", r.run_uuid AS run_id FROM runs r LEFT JOIN tags t ON t.run_uuid = r.run_uuid WHERE r.lifecycle_stage = 'active' AND EXISTS (SELECT 1 FROM tags m WHERE m.run_uuid = r.run_uuid AND m.key = 'modele' AND m.value = '$registre') AND $__unixEpochFilter(r.start_time / 1000) GROUP BY r.run_uuid ORDER BY r.start_time DESC LIMIT 50"
         }
       ],
       "fieldConfig": {

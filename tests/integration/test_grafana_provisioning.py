@@ -15,7 +15,8 @@ import yaml
 pytestmark = pytest.mark.integration
 
 INFRA = Path(__file__).resolve().parents[2] / 'infra' / 'grafana'
-VARIABLES = {'$modele': 'volatilite', '$symbole': "'BTCUSDT'"}
+# Ordre utile : `$modele` est remplacé avant `$mode`, qui en est un préfixe.
+VARIABLES = {'$modele': 'volatilite', '$mode': 'live', '$registre': 'volatilite', '$symbole': "'BTCUSDT'"}
 
 
 def _queries() -> list[tuple[str, str, str, str]]:
@@ -27,6 +28,8 @@ def _queries() -> list[tuple[str, str, str, str]]:
             for query in panel['targets']:
                 queries.append((board['uid'], panel['title'], query['datasource']['uid'], query['rawSql']))
         for variable in board['templating']['list']:
+            if variable['type'] != 'query':
+                continue  # liste fixe (ex. mode live / replay) : pas de requête
             queries.append(
                 (
                     board['uid'],
