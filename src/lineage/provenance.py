@@ -36,6 +36,7 @@ PACKAGES = (
     'connectors',
     'features',
     'flows',
+    'incident',
     'ingestion',
     'lineage',
     'marketdata',

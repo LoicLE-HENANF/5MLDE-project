@@ -431,7 +431,7 @@ le [README](README.md).
 
 ### Preuves d'intégration
 
-- **Tests** : 439 tests unitaires (`uv run pytest`, sans stack) et 70 tests d'intégration
+- **Tests** : 446 tests unitaires (`uv run pytest`, sans stack) et 70 tests d'intégration
   (`uv run pytest -m integration`, contre la stack réelle) : santé des briques, run MLflow → registre → alias → chargement, écritures PostgreSQL
   lues par Grafana, ingestion Binance de bout en bout (archive vérifiée par checksum, upsert idempotent),
   dashboards et alertes provisionnés, chaque requête SQL des dashboards exécutée par Grafana, lien entre run
@@ -452,6 +452,11 @@ le [README](README.md).
   `volatilite` bat nettement sa référence et se dégrade rarement. `rendement` a un IC faiblement positif mais un
   PnL glissant le plus souvent négatif : la règle de santé absolue (IC < 0 ou PnL < 0) le déclare souvent dégradé,
   d'où plus de retours arrière. C'est cohérent avec son niveau 2 en échec en live.
+
+- **Incident contrôlé** (19/11, `python -m incident`) : un lot BTCUSDT corrompu (incohérence OHLC sur une
+  bougie clôturée) passé dans le vrai flow d'ingestion est rejeté, rien n'est écrit, le lot et le run en échec
+  sont tracés et les deux alertes Grafana correspondantes passent en `firing`. MLflow arrêté : `/health` de
+  l'API répond 503 `degraded`, puis `ok` dès la relance, sans redémarrer l'API.
 
 ### Résultats des tests de charge
 
@@ -497,7 +502,8 @@ registre MLflow, inférence API, feedback, supervision et pilotage sont déjà r
 Pour la présentation, le projet peut être parcouru dans cet ordre :
 
 1. Montrer un cycle nominal d'ingestion puis un lot volontairement invalide dans un environnement de démonstration :
-   le lot doit être rejeté, tracé et visible dans Grafana. Expliquer aussi pourquoi la bougie du 2023-03-24 à
+   le lot doit être rejeté, tracé et visible dans Grafana (`python -m incident lot-invalide`, puis
+   `python -m incident dependance` pour une dépendance indisponible ; voir le README). Expliquer aussi pourquoi la bougie du 2023-03-24 à
    12:00 UTC est écartée sans rejeter tout le mois.
 2. Les deux entraînements comparent des candidats à des références sur des folds temporels, avec purge/embargo
    et un test final séparé ; les métriques n'impliquent pas une promesse de rentabilité.
