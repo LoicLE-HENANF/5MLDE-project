@@ -410,7 +410,63 @@ Les services sont assemblés avec Docker Compose. Le worker Prefect exécute les
 - **À réévaluer** si la cible change, ou sur une machine dédiée : la mesure partage les cœurs avec le client
   Locust, et le plafond observé (~300 req/s) semble venir du client ou du pool PostgreSQL plutôt que de l'API.
 
-## 7. Limites et suites possibles
+## 7. Synthèse OPS
+
+Cette section regroupe les choix d'exploitation, leurs preuves et leurs limites. Le détail des commandes est dans
+le [README](README.md).
+
+### Décisions techniques
+
+| Domaine | Choix | Raison |
+|---|---|---|
+| Assemblage | Docker Compose, 7 services avec healthcheck, `docker compose up -d --build --wait` | Un seul PC, démarrage reproductible en une commande |
+| Base | PostgreSQL 18 unique, bases `mlops`, `prefect`, `mlflow` ; rôles `api_writer` (INSERT/SELECT) et `grafana_reader` (lecture seule) | Pas de SQLite ; moindre privilège, traces en ajout seul |
+| Schéma | Scripts `infra/postgres/init/` et service `postgres-migrate` qui applique les scripts manquants (`public.schema_migrations`) | Un volume existant reçoit les nouvelles tables sans réinitialisation |
+| Orchestration | Prefect 3, 7 déploiements planifiés en UTC, servis par le worker | Ordre horaire ingestion → prévisions → retours ; entraînements le lundi |
+| Registre | MLflow (backend PostgreSQL), alias `champion` / `challenger` / `precedent`, promotion à deux niveaux, retour arrière après 3 jours dégradés | Cycle de vie traçable et réversible |
+| Provenance | Code versionné par tag Git (hatch-vcs), image construite depuis un tag propre, archive du code et dépendances jointes à chaque run | Un modèle publié est relié à un code identifiable |
+| Pilotage | Interrupteur persistant (`/system/state`) : les flows planifiés terminent en `cancelled` avec la raison | Arrêt d'urgence sans toucher à Docker |
+| Supervision | Grafana provisionné (4 dashboards, 6 règles d'alerte), variable `Mode` live / replay | Configuration versionnée, aucune saisie manuelle |
+| Rejeu | `python -m replay`, registre `<modèle>-replay`, traces `mode = 'replay'` | Montrer 12 mois de cycle de vie sans toucher au live |
+
+### Preuves d'intégration
+
+- **Tests** : 439 tests unitaires (`uv run pytest`, sans stack) et 70 tests d'intégration
+  (`uv run pytest -m integration`, contre la stack réelle) : santé des briques, run MLflow → registre → alias → chargement, écritures PostgreSQL
+  lues par Grafana, ingestion Binance de bout en bout (archive vérifiée par checksum, upsert idempotent),
+  dashboards et alertes provisionnés, chaque requête SQL des dashboards exécutée par Grafana, lien entre run
+  Prefect, run MLflow et traces.
+- **Exploitation réelle** (18/11 13:17 → 19/11 14:20, heure de Paris) : 119 runs planifiés ; 420 lots
+  d'ingestion acceptés et 5 rejetés (le seul run en échec, contrôle qualité bloquant) ; 125 prévisions
+  `volatilite` et 90 `rendement`, 75 retours enregistrés. Les 4 runs `cancelled` sont attendus : 2 sans
+  champion avant la première promotion manuelle, 1 test de l'interrupteur, 1 sans champion `rendement`.
+  La santé quotidienne live commence 48 h après les premières prévisions (`HEALTH_DELAY`).
+- **Rejeu** : 12 mois simulés (nov. 2025 → oct. 2026) avec le même code, visibles dans Grafana en mode `replay`.
+
+### Résultats des tests de charge
+
+Campagne Locust `2026-11-18T2120Z`, 6 configurations × 3 scénarios (normal, pic de début d'heure, rampe jusqu'à
+rupture), SLO p95 < 200 ms et < 1 % d'erreurs. Toutes les erreurs restent sous 0,02 %. Avec 0,5 cœur, toutes les
+configurations cassent dès 300 bots. Avec 1 cœur : 500 bots (1 processus), 600 bots (2 ou 4 processus). Tableau
+complet : README, section « Dimensionnement » ; dashboard Grafana « Charge ».
+
+### Dimensionnement recommandé
+
+**API : 1 processus uvicorn, 1 cœur, ~200 Mio** (défaut de `.env.example`). Pic tenu avec p95 36 ms, rupture à
+500 bots, soit 2,5 fois la cible de 200 bots. Doubler les processus n'ajoute que 100 bots pour deux fois plus de
+mémoire. PostgreSQL reste sous 10 % de CPU.
+
+### Limites connues
+
+- Tout tourne sur un seul PC : pas de haute disponibilité, la collecte s'arrête si le PC ou Docker s'arrête ;
+  client de charge et serveur partagent les cœurs.
+- Plafond de ~300 req/s identique à 2 et 4 processus : limite probable côté client Locust ou pool de connexions
+  (`API_DB_POOL_MAX=5`), non tranchée ; une seule campagne, paliers de 20 à 60 s.
+- Routes de supervision (`/health`, `/models/{nom}`) lentes car elles interrogent MLflow.
+- Pas de sauvegarde planifiée de la base ni des volumes (export manuel) ; pas de canal d'alerte externe ni de
+  dérive PSI en production (voir section 8).
+
+## 8. Limites et suites possibles
 
 Les éléments ci-dessous ne sont pas présentés comme des fonctions livrées :
 
@@ -426,7 +482,7 @@ Les éléments ci-dessous ne sont pas présentés comme des fonctions livrées :
 Ces suites ne remettent pas en cause le circuit livré : ingestion, contrôles qualité, entraînement walk-forward,
 registre MLflow, inférence API, feedback, supervision et pilotage sont déjà reliés.
 
-## 8. Points à démontrer et expliquer
+## 9. Points à démontrer et expliquer
 
 Pour la présentation, le projet peut être parcouru dans cet ordre :
 
