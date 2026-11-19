@@ -292,6 +292,28 @@ n'est branché pour l'instant.
 | Version de modèle dégradée | une version moins bonne que la référence naïve le dernier jour de santé |
 | Système arrêté | l'interrupteur est sur arrêt (information) |
 
+## Rejeu 12 mois (`src/replay/`)
+
+Simule des mois d'exploitation sur l'historique, avec le code de production (`training`, `serving`,
+`registry`) : chaque mois commence par un entraînement daté du 1er (`as_of`, bougies clôturées avant
+uniquement), puis la règle de promotion, puis heure par heure les prévisions du `champion` et du `challenger`,
+les retours à horizon clôturé, la santé quotidienne et le retour arrière après 3 jours dégradés.
+
+```powershell
+uv run python -m replay --start 2025-11 --months 12 --models volatilite rendement
+```
+
+- Registre séparé `<modèle>-replay` (`volatilite-replay`, `rendement-replay`) ; toutes les traces portent
+  `mode = 'replay'`. Le champion live et ses tableaux de bord ne sont jamais touchés.
+- Reprise : un mois terminé est noté dans `tracing.pipeline_runs` (`replay-<modèle>`), une relance reprend au
+  premier mois manquant. `--reset` efface les traces replay (compte administrateur PostgreSQL) ; les modèles
+  `*-replay` se suppriment à la main dans MLflow.
+- Dans le rejeu, un niveau 2 en échec n'empêche pas la promotion si le niveau 1 passe (démonstration du cycle
+  de vie) ; la raison est tracée dans l'événement du registre. Le live garde la règle complète.
+- Grafana : dashboard Service, variable « Mode » = `replay` (lien « Rejeu 12 mois ») ; dashboard Modèles,
+  modèle `volatilite-replay` ou `rendement-replay`. Runs, annotations et événements sont placés à la date
+  simulée (`as_of`), pas à la date d'écriture.
+
 ## Application de pilotage (Streamlit)
 
 `src/app/` (http://localhost:8501, service `app` de `compose.yml`) est la console d'exploitation :

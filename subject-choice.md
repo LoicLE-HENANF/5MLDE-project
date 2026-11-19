@@ -68,8 +68,14 @@ taker_buy_base_volume, taker_buy_quote_volume, ignore` (CSV **sans en-tête**).
 ### Rejeu et temps réel
 
 Le flow `ingest-candles` charge les mois d'historique absents depuis les archives puis récupère les bougies
-récentes par l'API REST. Il est planifié toutes les heures. Il n'existe pas de mode de rejeu accéléré séparé :
-la validation et les backtests rejouent les données historiques sur les folds temporels et le test final.
+récentes par l'API REST. Il est planifié toutes les heures. La validation et les backtests rejouent les données
+historiques sur les folds temporels et le test final.
+
+Pour montrer le cycle de vie complet sans attendre des mois, `python -m replay` rejoue 12 mois d'exploitation
+(nov. 2025 - oct. 2026) avec le même code que le live : entraînement mensuel, promotion, prévisions horaires,
+retours, santé et retour arrière. Il écrit dans un registre `<modèle>-replay` et des traces `mode = 'replay'`,
+séparés du live. Seul écart volontaire : un niveau 2 en échec n'y bloque pas la promotion, pour que les
+promotions et retours arrière soient visibles ; la raison est tracée.
 
 ### Contrôles qualité
 

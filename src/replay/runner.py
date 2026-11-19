@@ -36,7 +36,7 @@ from registry.promotion import (
 )
 from replay import batch
 from replay.models import ModelSpec
-from replay.store import ReplayStore
+from replay.store import MODE, ReplayStore
 from serving.feedback import pending_feedback
 
 HEALTH_DELAY = timedelta(days=2)
@@ -113,9 +113,24 @@ class Replay:
         predicted = self._model(int(champion.version)).predict(holdout.loc[:, list(FEATURE_COLUMNS)])
         return self.spec.champion_score(pd.Series(predicted).to_numpy(dtype='float64'), holdout)
 
+    def _tag_run(self, run_id: str, as_of: pd.Timestamp) -> None:
+        """Range le run sous le modèle `-replay` (et non le live) et date-le à `as_of` pour les dashboards."""
+        for key, value in {'modele': self.spec.replay_name, 'mode': MODE, 'as_of': as_of.isoformat()}.items():
+            self.connector.client.set_tag(run_id, key, value)
+
+    def _recorder(self, at: pd.Timestamp) -> Callable[..., Any]:
+        """Trace les événements du registre avec `mode` et la date simulée `as_of` (axe des annotations)."""
+
+        def record(**event: Any) -> Any:
+            details = {**(event.pop('details', None) or {}), 'mode': MODE, 'as_of': at.isoformat()}
+            return self.store.record_event(**event, details=details)
+
+        return record
+
     def train(self, as_of: pd.Timestamp) -> str:
         result = self.spec.fit(batch.closed_before(self.candles, as_of), as_of)
-        _, info = self.spec.log(result, self.connector)
+        run_id, info = self.spec.log(result, self.connector)
+        self._tag_run(run_id, as_of)
         decision = replay_decision(
             level1=self.spec.level1(result),
             level2=self.spec.level2(result),
@@ -127,7 +142,7 @@ class Replay:
             info,
             self.spec.replay_name,
             decision,
-            record=self.store.record_event,
+            record=self._recorder(as_of),
             allow_unreleased=self.allow_unreleased,
         )
         summary = decision.summary()
@@ -137,7 +152,7 @@ class Replay:
                 self.spec.replay_name,
                 version.version,
                 reason=BOOTSTRAP_REASON,
-                record=self.store.record_event,
+                record=self._recorder(as_of),
             )
             summary += ' ; amorçage manuel en champion'
         self.log(f'{self.spec.replay_name} {as_of:%Y-%m} : {summary}')
@@ -191,7 +206,8 @@ class Replay:
         if not should_roll_back(history):
             return None
         try:
-            restored = rollback(self.connector, self.spec.replay_name, record=self.store.record_event)
+            at = pd.Timestamp(datetime.combine(day, datetime.min.time(), tzinfo=UTC) + HEALTH_DELAY)
+            restored = rollback(self.connector, self.spec.replay_name, record=self._recorder(at))
         except RegistryError as exc:
             self.log(f'{self.spec.replay_name} {day} : retour arrière impossible ({exc})')
             return None

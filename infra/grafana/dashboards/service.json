@@ -18,6 +18,31 @@
   "templating": {
     "list": [
       {
+        "name": "mode",
+        "label": "Mode",
+        "type": "custom",
+        "query": "live,replay",
+        "description": "live : service réel ; replay : 12 mois rejoués (python -m replay)",
+        "current": {
+          "text": "live",
+          "value": "live"
+        },
+        "options": [
+          {
+            "text": "live",
+            "value": "live",
+            "selected": true
+          },
+          {
+            "text": "replay",
+            "value": "replay",
+            "selected": false
+          }
+        ],
+        "multi": false,
+        "includeAll": false
+      },
+      {
         "name": "modele",
         "label": "Modèle",
         "type": "query",
@@ -88,9 +113,9 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "table",
-          "rawSql": "SELECT recorded_at AS time, event || COALESCE(' ' || alias, '') || ' v' || version AS text, 'registre' AS tags FROM tracing.model_events WHERE model_name = '$modele' AND $__timeFilter(recorded_at)"
+          "rawSql": "SELECT event_time AS time, text, tags FROM (SELECT COALESCE((details->>'as_of')::timestamptz, recorded_at) AS event_time, event || COALESCE(' ' || alias, '') || ' v' || version AS text, 'registre' AS tags FROM tracing.model_events WHERE model_name = '$modele' || CASE WHEN '$mode' = 'replay' THEN '-replay' ELSE '' END) e WHERE $__timeFilter(event_time)"
         },
-        "rawQuery": "SELECT recorded_at AS time, event || COALESCE(' ' || alias, '') || ' v' || version AS text, 'registre' AS tags FROM tracing.model_events WHERE model_name = '$modele' AND $__timeFilter(recorded_at)"
+        "rawQuery": "SELECT event_time AS time, text, tags FROM (SELECT COALESCE((details->>'as_of')::timestamptz, recorded_at) AS event_time, event || COALESCE(' ' || alias, '') || ' v' || version AS text, 'registre' AS tags FROM tracing.model_events WHERE model_name = '$modele' || CASE WHEN '$mode' = 'replay' THEN '-replay' ELSE '' END) e WHERE $__timeFilter(event_time)"
       },
       {
         "name": "Repères marche / arrêt",
@@ -121,6 +146,14 @@
         "5mlde"
       ],
       "asDropdown": true
+    },
+    {
+      "title": "Rejeu 12 mois",
+      "type": "link",
+      "url": "/d/projet-service?var-mode=replay&from=now-13M&to=now",
+      "icon": "history",
+      "targetBlank": false,
+      "tooltip": "12 mois rejoués (python -m replay), traces marquées replay"
     }
   ],
   "panels": [
@@ -147,7 +180,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "table",
-          "rawSql": "SELECT version AS \"version\" FROM tracing.predictions WHERE model_name = '$modele' AND mode = 'live' AND alias = 'champion' ORDER BY id DESC LIMIT 1"
+          "rawSql": "SELECT version AS \"version\" FROM tracing.predictions WHERE model_name = '$modele' AND mode = '$mode' AND alias = 'champion' ORDER BY id DESC LIMIT 1"
         }
       ],
       "fieldConfig": {
@@ -203,7 +236,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "table",
-          "rawSql": "SELECT EXTRACT(EPOCH FROM now() - max(recorded_at)) AS \"âge\" FROM tracing.predictions WHERE model_name = '$modele' AND mode = 'live'"
+          "rawSql": "SELECT EXTRACT(EPOCH FROM now() - max(recorded_at)) AS \"âge\" FROM tracing.predictions WHERE model_name = '$modele' AND mode = '$mode'"
         }
       ],
       "fieldConfig": {
@@ -268,7 +301,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "table",
-          "rawSql": "SELECT count(*) AS \"retours\" FROM tracing.feedback f JOIN tracing.predictions p ON p.id = f.prediction_id WHERE p.model_name = '$modele' AND p.mode = 'live' AND $__timeFilter(f.recorded_at)"
+          "rawSql": "SELECT count(*) AS \"retours\" FROM tracing.feedback f JOIN tracing.predictions p ON p.id = f.prediction_id WHERE p.model_name = '$modele' AND p.mode = '$mode' AND $__timeFilter(f.recorded_at)"
         }
       ],
       "fieldConfig": {
@@ -324,7 +357,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "table",
-          "rawSql": "SELECT count(DISTINCT version) AS \"dégradées\" FROM tracing.model_health WHERE model_name = '$modele' AND mode = 'live' AND degraded AND day >= current_date - 7"
+          "rawSql": "SELECT count(DISTINCT version) AS \"dégradées\" FROM tracing.model_health WHERE model_name = '$modele' AND mode = '$mode' AND degraded AND day >= $__timeTo()::date - 7"
         }
       ],
       "fieldConfig": {
@@ -384,7 +417,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "time_series",
-          "rawSql": "SELECT open_time AS time, symbol || ' prévision' AS metric, prediction AS value FROM tracing.predictions WHERE model_name = '$modele' AND mode = 'live' AND alias = 'champion' AND symbol IN ($symbole) AND $__timeFilter(open_time) UNION ALL SELECT open_time, symbol || ' référence', baseline FROM tracing.predictions WHERE model_name = '$modele' AND mode = 'live' AND alias = 'champion' AND baseline IS NOT NULL AND symbol IN ($symbole) AND $__timeFilter(open_time) ORDER BY 1"
+          "rawSql": "SELECT open_time AS time, symbol || ' prévision' AS metric, prediction AS value FROM tracing.predictions WHERE model_name = '$modele' AND mode = '$mode' AND alias = 'champion' AND symbol IN ($symbole) AND $__timeFilter(open_time) UNION ALL SELECT open_time, symbol || ' référence', baseline FROM tracing.predictions WHERE model_name = '$modele' AND mode = '$mode' AND alias = 'champion' AND baseline IS NOT NULL AND symbol IN ($symbole) AND $__timeFilter(open_time) ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -463,7 +496,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "time_series",
-          "rawSql": "SELECT open_time AS time, symbol AS metric, position AS value FROM tracing.predictions WHERE model_name = '$modele' AND mode = 'live' AND alias = 'champion' AND position IS NOT NULL AND symbol IN ($symbole) AND $__timeFilter(open_time) ORDER BY 1"
+          "rawSql": "SELECT open_time AS time, symbol AS metric, position AS value FROM tracing.predictions WHERE model_name = '$modele' AND mode = '$mode' AND alias = 'champion' AND position IS NOT NULL AND symbol IN ($symbole) AND $__timeFilter(open_time) ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -524,7 +557,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "time_series",
-          "rawSql": "SELECT open_time AS time, symbol || ' ' || alias || ' v' || version AS metric, prediction AS value FROM tracing.predictions WHERE model_name = '$modele' AND mode = 'live' AND symbol IN ($symbole) AND $__timeFilter(open_time) ORDER BY 1"
+          "rawSql": "SELECT open_time AS time, symbol || ' ' || alias || ' v' || version AS metric, prediction AS value FROM tracing.predictions WHERE model_name = '$modele' AND mode = '$mode' AND symbol IN ($symbole) AND $__timeFilter(open_time) ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -603,7 +636,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "time_series",
-          "rawSql": "SELECT $__timeGroupAlias(p.open_time, '1d'), p.alias || ' v' || p.version AS metric, avg(f.loss) AS value FROM tracing.feedback f JOIN tracing.predictions p ON p.id = f.prediction_id WHERE p.model_name = '$modele' AND p.mode = 'live' AND p.symbol IN ($symbole) AND $__timeFilter(p.open_time) GROUP BY 1, 2 UNION ALL SELECT $__timeGroupAlias(p.open_time, '1d'), 'référence', avg(f.baseline_loss) FROM tracing.feedback f JOIN tracing.predictions p ON p.id = f.prediction_id WHERE p.model_name = '$modele' AND p.mode = 'live' AND p.alias = 'champion' AND p.symbol IN ($symbole) AND $__timeFilter(p.open_time) GROUP BY 1 ORDER BY 1"
+          "rawSql": "SELECT $__timeGroupAlias(p.open_time, '1d'), p.alias || ' v' || p.version AS metric, avg(f.loss) AS value FROM tracing.feedback f JOIN tracing.predictions p ON p.id = f.prediction_id WHERE p.model_name = '$modele' AND p.mode = '$mode' AND p.symbol IN ($symbole) AND $__timeFilter(p.open_time) GROUP BY 1, 2 UNION ALL SELECT $__timeGroupAlias(p.open_time, '1d'), 'référence', avg(f.baseline_loss) FROM tracing.feedback f JOIN tracing.predictions p ON p.id = f.prediction_id WHERE p.model_name = '$modele' AND p.mode = '$mode' AND p.alias = 'champion' AND p.symbol IN ($symbole) AND $__timeFilter(p.open_time) GROUP BY 1 ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -682,7 +715,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "time_series",
-          "rawSql": "SELECT day::timestamptz AS time, metric || ' v' || version AS metric, value FROM tracing.model_health WHERE model_name = '$modele' AND mode = 'live' AND $__timeFilter(day::timestamptz) UNION ALL SELECT day::timestamptz, metric || ' référence v' || version, baseline_value FROM tracing.model_health WHERE model_name = '$modele' AND mode = 'live' AND baseline_value IS NOT NULL AND $__timeFilter(day::timestamptz) ORDER BY 1"
+          "rawSql": "SELECT day::timestamptz AS time, metric || ' v' || version AS metric, value FROM tracing.model_health WHERE model_name = '$modele' AND mode = '$mode' AND $__timeFilter(day::timestamptz) UNION ALL SELECT day::timestamptz, metric || ' référence v' || version, baseline_value FROM tracing.model_health WHERE model_name = '$modele' AND mode = '$mode' AND baseline_value IS NOT NULL AND $__timeFilter(day::timestamptz) ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -761,7 +794,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "time_series",
-          "rawSql": "SELECT day::timestamptz AS time, 'v' || version || ' ciblage' AS metric, pnl AS value FROM tracing.model_health WHERE model_name = '$modele' AND mode = 'live' AND pnl IS NOT NULL AND $__timeFilter(day::timestamptz) UNION ALL SELECT day::timestamptz, 'v' || version || ' équipondéré', baseline_pnl FROM tracing.model_health WHERE model_name = '$modele' AND mode = 'live' AND baseline_pnl IS NOT NULL AND $__timeFilter(day::timestamptz) ORDER BY 1"
+          "rawSql": "SELECT day::timestamptz AS time, 'v' || version || ' ciblage' AS metric, pnl AS value FROM tracing.model_health WHERE model_name = '$modele' AND mode = '$mode' AND pnl IS NOT NULL AND $__timeFilter(day::timestamptz) UNION ALL SELECT day::timestamptz, 'v' || version || ' équipondéré', baseline_pnl FROM tracing.model_health WHERE model_name = '$modele' AND mode = '$mode' AND baseline_pnl IS NOT NULL AND $__timeFilter(day::timestamptz) ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -841,7 +874,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "table",
-          "rawSql": "SELECT DISTINCT ON (symbol, alias) symbol AS \"symbole\", alias, version, open_time AS \"bougie\", horizon_hours AS \"horizon (h)\", prediction AS \"prévision\", baseline AS \"référence\", position, recorded_at AS \"écrite le\" FROM tracing.predictions WHERE model_name = '$modele' AND mode = 'live' ORDER BY symbol, alias, open_time DESC"
+          "rawSql": "SELECT DISTINCT ON (symbol, alias) symbol AS \"symbole\", alias, version, open_time AS \"bougie\", horizon_hours AS \"horizon (h)\", prediction AS \"prévision\", baseline AS \"référence\", position, recorded_at AS \"écrite le\" FROM tracing.predictions WHERE model_name = '$modele' AND mode = '$mode' ORDER BY symbol, alias, open_time DESC"
         }
       ],
       "fieldConfig": {
@@ -917,7 +950,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "table",
-          "rawSql": "SELECT day AS \"jour\", version, metric AS \"mesure\", samples AS \"échantillons\", value AS \"valeur\", baseline_value AS \"référence\", pnl, baseline_pnl AS \"PnL équipondéré\", CASE WHEN degraded THEN 'oui' ELSE 'non' END AS \"dégradée\" FROM tracing.model_health WHERE model_name = '$modele' AND mode = 'live' ORDER BY day DESC, version DESC LIMIT 60"
+          "rawSql": "SELECT day AS \"jour\", version, metric AS \"mesure\", samples AS \"échantillons\", value AS \"valeur\", baseline_value AS \"référence\", pnl, baseline_pnl AS \"PnL équipondéré\", CASE WHEN degraded THEN 'oui' ELSE 'non' END AS \"dégradée\" FROM tracing.model_health WHERE model_name = '$modele' AND mode = '$mode' ORDER BY day DESC, version DESC LIMIT 60"
         }
       ],
       "fieldConfig": {

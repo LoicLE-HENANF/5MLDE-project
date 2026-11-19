@@ -96,6 +96,16 @@ def test_train_uses_the_replay_registry_and_leaves_live_untouched(local_connecto
     names = {model.name for model in local_connector.client.search_registered_models()}
     assert names == {'volatilite-replay'}
     assert {event['model_name'] for event in store.events} == {'volatilite-replay'}
+    assert {event['details']['mode'] for event in store.events} == {'replay'}
+    assert store.events[0]['details']['as_of'] == AS_OF.isoformat()
+    assert store.events[-1]['details']['as_of'] == (AS_OF + pd.DateOffset(months=2)).isoformat()
+
+    runs = local_connector.client.search_runs([local_connector.experiment_id()])
+    assert {run.data.tags['modele'] for run in runs} == {'volatilite-replay'}
+    assert {run.data.tags['mode'] for run in runs} == {'replay'}
+    assert sorted(run.data.tags['as_of'] for run in runs) == [
+        (AS_OF + pd.DateOffset(months=month)).isoformat() for month in range(3)
+    ]
 
 
 def test_rollback_after_consecutive_degraded_days(local_connector, released):  # noqa: F811
@@ -111,6 +121,7 @@ def test_rollback_after_consecutive_degraded_days(local_connector, released):  #
     replay.train(AS_OF + pd.DateOffset(months=1))
 
     assert replay._rollback(date(2025, 2, 20)) == 1
+    assert store.events[-1]['details']['as_of'] == '2025-02-22T00:00:00+00:00'
     assert status(local_connector, 'volatilite-replay')[CHAMPION] == '1'
 
 

@@ -64,9 +64,9 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "table",
-          "rawSql": "SELECT recorded_at AS time, event || COALESCE(' ' || alias, '') || ' v' || version AS text, 'registre' AS tags FROM tracing.model_events WHERE model_name = '$modele' AND $__timeFilter(recorded_at)"
+          "rawSql": "SELECT event_time AS time, text, tags FROM (SELECT COALESCE((details->>'as_of')::timestamptz, recorded_at) AS event_time, event || COALESCE(' ' || alias, '') || ' v' || version AS text, 'registre' AS tags FROM tracing.model_events WHERE model_name = '$modele') e WHERE $__timeFilter(event_time)"
         },
-        "rawQuery": "SELECT recorded_at AS time, event || COALESCE(' ' || alias, '') || ' v' || version AS text, 'registre' AS tags FROM tracing.model_events WHERE model_name = '$modele' AND $__timeFilter(recorded_at)"
+        "rawQuery": "SELECT event_time AS time, text, tags FROM (SELECT COALESCE((details->>'as_of')::timestamptz, recorded_at) AS event_time, event || COALESCE(' ' || alias, '') || ' v' || version AS text, 'registre' AS tags FROM tracing.model_events WHERE model_name = '$modele') e WHERE $__timeFilter(event_time)"
       }
     ]
   },
@@ -78,6 +78,14 @@
         "5mlde"
       ],
       "asDropdown": true
+    },
+    {
+      "title": "Rejeu 12 mois",
+      "type": "link",
+      "url": "/d/projet-modeles?var-modele=volatilite-replay&from=now-13M&to=now",
+      "icon": "history",
+      "targetBlank": false,
+      "tooltip": "12 mois rejoués (python -m replay), traces marquées replay"
     }
   ],
   "panels": [
@@ -402,7 +410,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "time_series",
-          "rawSql": "SELECT to_timestamp(r.start_time / 1000.0) AS time, substr(m.key, 6) AS metric, m.value FROM runs r JOIN latest_metrics m ON m.run_uuid = r.run_uuid WHERE r.status = 'FINISHED' AND r.lifecycle_stage = 'active' AND EXISTS (SELECT 1 FROM tags m WHERE m.run_uuid = r.run_uuid AND m.key = 'modele' AND m.value = '$modele') AND m.key LIKE 'test\\_%' AND m.key NOT LIKE 'test\\_bat\\_%' AND $__unixEpochFilter(r.start_time / 1000) ORDER BY 1"
+          "rawSql": "SELECT run_time AS time, metric, value FROM (SELECT COALESCE((SELECT a.value FROM tags a WHERE a.run_uuid = r.run_uuid AND a.key = 'as_of')::timestamptz, to_timestamp(r.start_time / 1000.0)) AS run_time, substr(m.key, 6) AS metric, m.value FROM runs r JOIN latest_metrics m ON m.run_uuid = r.run_uuid WHERE r.status = 'FINISHED' AND r.lifecycle_stage = 'active' AND EXISTS (SELECT 1 FROM tags m WHERE m.run_uuid = r.run_uuid AND m.key = 'modele' AND m.value = '$modele') AND m.key LIKE 'test\\_%' AND m.key NOT LIKE 'test\\_bat\\_%') q WHERE $__timeFilter(run_time) ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -462,7 +470,7 @@
           "editorMode": "code",
           "rawQuery": true,
           "format": "table",
-          "rawSql": "SELECT to_timestamp(r.start_time / 1000.0) AS \"début\", r.name AS run, r.status AS \"statut\", round((r.end_time - r.start_time) / 1000.0, 1) AS \"durée (s)\", max(t.value) FILTER (WHERE t.key = 'candidat') AS candidat, max(t.value) FILTER (WHERE t.key = 'code.version') AS code, max(t.value) FILTER (WHERE t.key = 'code.dirty') AS \"code modifié\", left(max(t.value) FILTER (WHERE t.key = 'data.sha256'), 12) AS \"données\", r.experiment_id AS \"expérience\", r.run_uuid AS run_id FROM runs r LEFT JOIN tags t ON t.run_uuid = r.run_uuid WHERE r.lifecycle_stage = 'active' AND EXISTS (SELECT 1 FROM tags m WHERE m.run_uuid = r.run_uuid AND m.key = 'modele' AND m.value = '$modele') AND $__unixEpochFilter(r.start_time / 1000) GROUP BY r.run_uuid ORDER BY r.start_time DESC LIMIT 50"
+          "rawSql": "SELECT to_timestamp(r.start_time / 1000.0) AS \"début\", r.name AS run, max(t.value) FILTER (WHERE t.key = 'as_of') AS \"date simulée\", r.status AS \"statut\", round((r.end_time - r.start_time) / 1000.0, 1) AS \"durée (s)\", max(t.value) FILTER (WHERE t.key = 'candidat') AS candidat, max(t.value) FILTER (WHERE t.key = 'code.version') AS code, max(t.value) FILTER (WHERE t.key = 'code.dirty') AS \"code modifié\", left(max(t.value) FILTER (WHERE t.key = 'data.sha256'), 12) AS \"données\", r.experiment_id AS \"expérience\", r.run_uuid AS run_id FROM runs r LEFT JOIN tags t ON t.run_uuid = r.run_uuid WHERE r.lifecycle_stage = 'active' AND EXISTS (SELECT 1 FROM tags m WHERE m.run_uuid = r.run_uuid AND m.key = 'modele' AND m.value = '$modele') AND $__unixEpochFilter(r.start_time / 1000) GROUP BY r.run_uuid ORDER BY r.start_time DESC LIMIT 50"
         }
       ],
       "fieldConfig": {
