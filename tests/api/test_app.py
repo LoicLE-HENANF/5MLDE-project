@@ -90,7 +90,11 @@ def test_model_returns_aliases_health_and_events(client, services):
     assert response.status_code == 200
     body = response.json()
     assert body['aliases'] == ALIASES
-    assert services.db.select.call_args_list[0].args[1] == ('volatilite', 3)
+    query, params = services.db.select.call_args_list[0].args
+    assert params == ('volatilite', 3)
+    # santé du service réel uniquement, sur `days` jours (pas `days` lignes)
+    text = query.as_string(None)
+    assert "mode = 'live'" in text and 'current_date - %s' in text and 'LIMIT' not in text
 
 
 # -- actions sur le registre ----------------------------------------------------

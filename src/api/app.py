@@ -60,7 +60,8 @@ LATEST_PREDICTIONS = sql.SQL(
 ).format(_table('predictions'))
 HEALTH = sql.SQL(
     'SELECT day, version, mode, samples, metric, value, baseline_value, pnl, baseline_pnl, degraded '
-    'FROM {} WHERE model_name = %s ORDER BY day DESC, version DESC LIMIT %s'
+    "FROM {} WHERE model_name = %s AND mode = 'live' AND day > current_date - %s "
+    'ORDER BY day DESC, version DESC'
 ).format(_table('model_health'))
 EVENTS = sql.SQL(
     'SELECT version, event, alias, details, recorded_at FROM {} '

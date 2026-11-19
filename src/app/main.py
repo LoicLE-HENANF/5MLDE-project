@@ -194,8 +194,8 @@ def models_page(client: api.ApiClient, operator: str) -> None:
     health_rows = tables.health_frame(info['health'])
     if health_rows.empty:
         st.info(
-            "Pas encore de santé calculée : il faut au moins un jour de prévisions dont l'horizon est "
-            'clôturé (flow `feedback-volatility`).'
+            "Pas encore de santé calculée en live : il faut un jour complet de prévisions dont l'horizon "
+            'est clôturé (flows `feedback-volatility` / `feedback-returns`, environ 48 h après).'
         )
     else:
         live = health_rows[health_rows['Mode'] == 'live']
