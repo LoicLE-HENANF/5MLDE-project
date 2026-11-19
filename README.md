@@ -427,3 +427,5 @@ restent dans l'expérience `integration-tests`, séparée de celle du projet.
 uv run ruff check src tests
 uv run ruff format src tests
 ```
+
+Intégration continue (`.github/workflows/ci.yml`, GitHub Actions) : à chaque push et pull request vers `main`, `uv sync --locked`, `ruff check`, `ruff format --check` et les tests unitaires (`pytest -m "not integration"`) tournent sur Ubuntu avec Python 3.12. Les tests d'intégration restent locaux, car ils demandent la stack démarrée. Le ruleset de `main` exige que ce check passe avant tout merge.
