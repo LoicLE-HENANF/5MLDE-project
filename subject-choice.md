@@ -441,7 +441,17 @@ le [README](README.md).
   `volatilite` et 90 `rendement`, 75 retours enregistrés. Les 4 runs `cancelled` sont attendus : 2 sans
   champion avant la première promotion manuelle, 1 test de l'interrupteur, 1 sans champion `rendement`.
   La santé quotidienne live commence 48 h après les premières prévisions (`HEALTH_DELAY`).
-- **Rejeu** : 12 mois simulés (nov. 2025 → oct. 2026) avec le même code, visibles dans Grafana en mode `replay`.
+- **Rejeu** (12 mois, nov. 2025 → oct. 2026, même code que le live, visible dans Grafana en mode `replay`) :
+
+  | Modèle | Prévisions / retours | Versions enregistrées | Promotions | Retours arrière | Jours dégradés | Métrique moyenne (référence) |
+  |---|---|---|---|---|---|---|
+  | `volatilite` | 80 280 / 80 040 | 12 | 8 | 3 | 72 / 718 | QLIKE 0,319 (persistance 0,730) |
+  | `rendement` | 76 560 / 76 560 | 10 (mars et avril 2026 rejetées au niveau 1) | 7 | 6 | 524 / 691 | IC 0,005 (momentum −0,045) |
+
+  Les retours `volatilite` manquants sont les prévisions des dernières 24 h, dont l'horizon dépasse la fin du rejeu.
+  `volatilite` bat nettement sa référence et se dégrade rarement. `rendement` a un IC faiblement positif mais un
+  PnL glissant le plus souvent négatif : la règle de santé absolue (IC < 0 ou PnL < 0) le déclare souvent dégradé,
+  d'où plus de retours arrière. C'est cohérent avec son niveau 2 en échec en live.
 
 ### Résultats des tests de charge
 
