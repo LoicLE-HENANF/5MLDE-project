@@ -37,6 +37,11 @@ Les mots de passe PostgreSQL ne sont appliqués qu'à la création du volume `po
 Créés par `infra/postgres/init/001-roles.sql` au premier démarrage du volume ; les tables de
 traçabilité sont créées par `infra/postgres/init/002-tracing.sql`.
 
+Sur un volume existant, le service ponctuel `postgres-migrate` applique à chaque `docker compose up`
+les scripts `init/*.sql` pas encore passés (suivi dans `public.schema_migrations`, voir
+`infra/postgres/migrate.sh`). Pour faire évoluer le schéma, ajouter un nouveau script numéroté
+(`007-...sql`) sans modifier ceux déjà publiés : pas besoin de `docker compose down -v`.
+
 | Rôle | Accès |
 |---|---|
 | `api_writer` | `mlops.tracing` : SELECT/INSERT (traces en ajout seul) |
