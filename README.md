@@ -315,6 +315,25 @@ uv run python -m replay --start 2025-11 --months 12 --models volatilite rendemen
   en replay). Élargir la période (ex. 1 an) pour voir le rejeu. Runs, annotations et événements sont placés à
   la date simulée (`as_of`), pas à la date d'écriture.
 
+## Incident contrôlé (`src/incident/`)
+
+Deux scénarios joués contre la stack démarrée, pour la démonstration :
+
+```powershell
+uv run python -m incident lot-invalide   # lot de bougies corrompu dans le vrai flow d'ingestion
+uv run python -m incident dependance     # arrêt de MLflow, API dégradée, Entrée pour relancer
+```
+
+- `lot-invalide` : le flow `ingest-candles` (BTCUSDT, bougies récentes) reçoit la réponse réelle de Binance
+  dont la dernière bougie clôturée a un plus haut sous son corps. Le contrôle qualité la bloque
+  (« incohérence OHLC ») : rien n'est écrit dans `market.candles`, le lot est tracé `rejected` dans
+  `tracing.ingestion_batches`, le run finit en `failure` et les alertes Grafana « Lot d'ingestion rejeté » et
+  « Flow Prefect en échec » se déclenchent (dashboard Traitements). L'ingestion horaire suivante reprend
+  normalement.
+- `dependance` : `docker compose stop mlflow`, `/health` de l'API passe en 503 (`degraded`, MLflow injoignable),
+  puis `docker compose start mlflow` et retour à `ok` sans redémarrer l'API. `--service` choisit un autre service.
+  À éviter pendant un run planifié (minutes :02, :07, :08, :20, :21), qui échouerait.
+
 ## Application de pilotage (Streamlit)
 
 `src/app/` (http://localhost:8501, service `app` de `compose.yml`) est la console d'exploitation :
